@@ -3,60 +3,42 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101114">
-  <meta name="description" content="Track inventory, sales, payouts, and profit with ResellLedger.">
   <title>ResellLedger</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-icon">R</div>
-      <div>
-        <h1>ResellLedger</h1>
-        <p>Your reselling dashboard</p>
-      </div>
-    </div>
+    <button class="brand brand-home-button" type="button" data-page="home" aria-label="Go to Home">
+      <span class="brand-icon">R</span>
+      <span class="brand-copy">
+        <span class="brand-title">ResellLedger</span>
+        <span class="brand-subtitle">Your reselling dashboard</span>
+      </span>
+    </button>
   </header>
 
   <main class="app-container">
-    <section class="page active" id="dashboardPage">
+    <section class="page active" id="page-home">
       <div class="page-heading">
-        <div>
-          <p class="eyebrow">OVERVIEW</p>
-          <h2>Dashboard</h2>
-        </div>
+        <div><p class="eyebrow">OVERVIEW</p><h2>Dashboard</h2></div>
       </div>
 
       <div class="stats-grid">
-        <article class="stat-card">
-          <p>Total inventory cost</p>
-          <h3 id="inventoryCost">$0.00</h3>
-        </article>
-        <article class="stat-card">
-          <p>Sales revenue</p>
-          <h3 id="totalRevenue">$0.00</h3>
-        </article>
-        <article class="stat-card">
-          <p>Realized profit</p>
-          <h3 id="totalProfit">$0.00</h3>
-        </article>
-        <article class="stat-card">
-          <p>Awaiting payout</p>
-          <h3 id="pendingPayout">$0.00</h3>
-        </article>
+        <article class="stat-card"><p>Capital recovered</p><h3 id="capitalValue">$0.00</h3></article>
+        <article class="stat-card"><p>Reinvestment funds</p><h3 id="reinvestmentValue">$0.00</h3></article>
+        <article class="stat-card"><p>Personal funds</p><h3 id="personalValue">$0.00</h3></article>
+        <article class="stat-card"><p>Awaiting payout</p><h3 id="pendingValue">$0.00</h3></article>
+        <article class="stat-card"><p>Lifetime profit</p><h3 id="lifetimeProfitValue">$0.00</h3></article>
       </div>
 
       <section class="panel">
         <div class="panel-heading">
-          <div>
-            <p class="eyebrow">YOUR BUSINESS</p>
-            <h3>Quick actions</h3>
-          </div>
+          <div><p class="eyebrow">YOUR BUSINESS</p><h3>Quick actions</h3></div>
         </div>
         <div class="quick-actions">
-          <button class="primary-button" type="button" data-page="add">+ Add item</button>
+          <button class="primary-button" id="quickAddButton" type="button">+ Add item</button>
           <button class="secondary-button" type="button" data-page="inventory">View inventory</button>
           <button class="secondary-button" type="button" data-page="sold">View sold items</button>
         </div>
@@ -64,80 +46,77 @@
 
       <section class="panel">
         <div class="panel-heading">
-          <div>
-            <p class="eyebrow">RECENT ACTIVITY</p>
-            <h3>Recently added</h3>
-          </div>
+          <div><p class="eyebrow">RECENT ACTIVITY</p><h3>Recently added</h3></div>
           <button class="text-button" type="button" data-page="inventory">View all</button>
         </div>
-        <div id="recentItems" class="item-list"></div>
+        <div id="recentInventory" class="item-list"></div>
       </section>
     </section>
 
-    <section class="page" id="inventoryPage">
+    <section class="page" id="page-inventory">
       <div class="page-heading">
-        <div>
-          <p class="eyebrow">YOUR STOCK</p>
-          <h2>Inventory</h2>
-        </div>
-        <button class="primary-button" type="button" data-page="add">+ Add</button>
+        <div><p class="eyebrow">YOUR STOCK</p><h2>Inventory</h2></div>
+        <button class="primary-button" type="button" data-page="add">+ Add item</button>
       </div>
-
       <div class="filter-row">
         <input id="inventorySearch" type="search" placeholder="Search inventory..." aria-label="Search inventory">
-        <select id="inventoryFilter" aria-label="Filter inventory">
-          <option value="all">All items</option>
-          <option value="available">Available</option>
-          <option value="pending">Pending</option>
+        <select id="categoryFilter" aria-label="Filter by category">
+          <option value="all">All categories</option>
         </select>
       </div>
-
-      <div id="inventoryItems" class="item-list"></div>
+      <div id="inventoryList" class="item-list"></div>
     </section>
 
-    <section class="page" id="addPage">
+    <section class="page" id="page-add">
       <div class="page-heading">
-        <div>
-          <p class="eyebrow">INVENTORY MANAGEMENT</p>
-          <h2 id="itemFormTitle">Add inventory item</h2>
-        </div>
+        <div><p class="eyebrow">INVENTORY MANAGEMENT</p><h2 id="itemFormTitle">Add inventory item</h2></div>
       </div>
 
       <form id="itemForm" class="panel form-panel">
         <div class="form-group">
           <label for="itemName">Item name *</label>
-          <input id="itemName" name="itemName" type="text" placeholder="e.g. Pokémon card or vintage jacket" required>
+          <input id="itemName" name="itemName" type="text" placeholder="e.g. Charizard card" required>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label for="itemCategory">Category *</label>
-            <select id="itemCategory" name="itemCategory" required>
-              <option value="Pokémon">Pokémon</option>
-              <option value="Clothing">Clothing</option>
-              <option value="Electronics">Electronics</option>
-              <option value="Shoes">Shoes</option>
-              <option value="Collectibles">Collectibles</option>
-              <option value="Other">Other</option>
-              <option value="__custom__">+ Custom category</option>
-            </select>
+            <label for="productCategory">Category *</label>
+            <select id="productCategory" name="productCategory" required></select>
           </div>
-
           <div class="form-group">
             <label for="itemCondition">Condition</label>
-            <select id="itemCondition" name="itemCondition">
-              <option value="Not specified">Not specified</option>
-              <option value="Near Mint">Near Mint</option>
-              <option value="Lightly Played">Lightly Played</option>
-              <option value="Moderately Played">Moderately Played</option>
-              <option value="Heavily Played">Heavily Played</option>
-              <option value="Damaged">Damaged</option>
-              <option value="New">New</option>
-              <option value="Like New">Like New</option>
-              <option value="Good">Good</option>
-              <option value="Fair">Fair</option>
-              <option value="Poor">Poor</option>
+            <select id="itemCondition" name="itemCondition"><option>Not specified</option></select>
+          </div>
+        </div>
+
+        <div id="cardFields">
+          <div class="form-group">
+            <label for="cardType">Card type</label>
+            <select id="cardType" name="cardType">
+              <option value="raw">Raw / ungraded</option>
+              <option value="graded">Graded</option>
             </select>
+          </div>
+          <div id="gradingFields" class="form-row">
+            <div class="form-group">
+              <label for="gradingCompany">Grading company</label>
+              <select id="gradingCompany" name="gradingCompany">
+                <option value="">Not specified</option>
+                <option>PSA</option>
+                <option>CGC</option>
+                <option>Beckett</option>
+                <option>SGC</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cardGrade">Grade</label>
+              <input id="cardGrade" name="cardGrade" type="text" placeholder="e.g. 10">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="certNumber">Certification number</label>
+            <input id="certNumber" name="certNumber" type="text" placeholder="Optional">
           </div>
         </div>
 
@@ -146,24 +125,10 @@
             <label for="purchaseCost">Purchase cost ($) *</label>
             <input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="0.00" required>
           </div>
-
           <div class="form-group">
-            <label for="estimatedValue">Estimated sale price ($)</label>
-            <input id="estimatedValue" name="estimatedValue" type="number" min="0" step="0.01" placeholder="0.00">
+            <label for="purchaseDate">Purchase date *</label>
+            <input id="purchaseDate" name="purchaseDate" type="date" required>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label for="itemPlatform">Where will you sell it?</label>
-          <select id="itemPlatform" name="itemPlatform">
-            <option value="">Not specified</option>
-            <option value="eBay">eBay</option>
-            <option value="Facebook Marketplace">Facebook Marketplace</option>
-            <option value="Mercari">Mercari</option>
-            <option value="Whatnot">Whatnot</option>
-            <option value="Local">Local sale</option>
-            <option value="Other">Other</option>
-          </select>
         </div>
 
         <div class="form-group">
@@ -172,64 +137,51 @@
         </div>
 
         <div class="form-group">
-          <label for="itemImage">Item photo (optional)</label>
-          <input id="itemImage" name="itemImage" type="file" accept="image/*">
-          <p class="field-hint">Photos are stored in this browser, so use smaller images when possible.</p>
-          <div id="imagePreview" class="image-preview"></div>
+          <label for="itemPhoto">Item photo (optional)</label>
+          <input id="itemPhoto" name="itemPhoto" type="file" accept="image/*">
+          <p class="field-hint">Choose an image smaller than 2 MB.</p>
         </div>
 
+        <p id="formMessage" class="form-message" role="status"></p>
         <button class="primary-button full-button" id="itemFormSubmit" type="submit">Save item</button>
-        <button class="secondary-button full-button hidden" id="cancelEditButton" type="button">Cancel editing</button>
       </form>
     </section>
 
-    <section class="page" id="pendingPage">
+    <section class="page" id="page-pending">
       <div class="page-heading">
-        <div>
-          <p class="eyebrow">AWAITING COMPLETION</p>
-          <h2>Pending</h2>
-        </div>
+        <div><p class="eyebrow">AWAITING COMPLETION</p><h2>Pending payouts</h2></div>
       </div>
-      <p class="page-description">Items sold but still awaiting payout or completion.</p>
-      <div id="pendingItems" class="item-list"></div>
+      <p class="page-description">Sales waiting for payment will appear here.</p>
+      <div id="pendingList" class="item-list"></div>
     </section>
 
-    <section class="page" id="soldPage">
+    <section class="page" id="page-sold">
       <div class="page-heading">
-        <div>
-          <p class="eyebrow">SALES HISTORY</p>
-          <h2>Sold items</h2>
-        </div>
+        <div><p class="eyebrow">SALES HISTORY</p><h2>Completed sales</h2></div>
       </div>
-      <div id="soldItems" class="item-list"></div>
+      <div id="soldList" class="item-list"></div>
     </section>
   </main>
 
   <nav class="bottom-nav" aria-label="Main navigation">
-    <button class="nav-button active" type="button" data-page="dashboard">
-      <span class="nav-icon">⌂</span>
-      <span>Home</span>
-    </button>
-    <button class="nav-button" type="button" data-page="inventory">
-      <span class="nav-icon">▤</span>
-      <span>Inventory</span>
-    </button>
-    <button class="nav-button add-nav-button" type="button" data-page="add">
-      <span class="nav-icon">＋</span>
-      <span>Add item</span>
-    </button>
-    <button class="nav-button" type="button" data-page="pending">
-      <span class="nav-icon">◷</span>
-      <span>Pending</span>
-    </button>
-    <button class="nav-button" type="button" data-page="sold">
-      <span class="nav-icon">✓</span>
-      <span>Sold</span>
-    </button>
+    <button class="nav-button active" type="button" data-page="home"><span class="nav-icon">⌂</span><span>Home</span></button>
+    <button class="nav-button" type="button" data-page="inventory"><span class="nav-icon">▤</span><span>Inventory</span></button>
+    <button class="nav-button add-nav-button" type="button" data-page="add"><span class="nav-icon">＋</span><span>Add item</span></button>
+    <button class="nav-button" type="button" data-page="pending"><span class="nav-icon">◷</span><span>Pending</span></button>
+    <button class="nav-button" type="button" data-page="sold"><span class="nav-icon">✓</span><span>Sold</span></button>
   </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <div id="modalRoot"></div>
+
+  <div id="itemDetails" class="details-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
+    <section class="details-panel">
+      <div class="details-header">
+        <div><h2 id="detailsTitle">Item details</h2><p id="detailsSubtitle"></p></div>
+        <button class="icon-button" id="closeDetails" type="button" aria-label="Close details">×</button>
+      </div>
+      <div id="detailsContent"></div>
+    </section>
+  </div>
 
   <script src="app.js"></script>
 </body>
