@@ -1,1 +1,231 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101114">
+  <meta name="description" content="Track inventory, sales, expenses, and profit with ResellLedger.">
+  <title>ResellLedger</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="ResellLedger home">
+        <span class="brand-mark">R</span>
+        <span>ResellLedger</span>
+      </a>
+      <div class="topbar-right">
+        <span class="status-dot"></span>
+        <span class="status-text">Personal workspace</span>
+      </div>
+    </header>
+    <main class="main-content">
+      <section class="welcome-section">
+        <div>
+          <p class="eyebrow">YOUR RESALE BUSINESS</p>
+          <h1>Know your numbers.</h1>
+          <p class="muted">Track your inventory, sales, and money in one place.</p>
+        </div>
+        <button class="primary-button" id="quickAddButton" type="button">
+          + Add item
+        </button>
+      </section>
+      <section class="metrics-grid" aria-label="Financial overview">
+        <article class="metric-card">
+          <p class="metric-label">Business capital</p>
+          <h2 id="capitalValue">$0.00</h2>
+          <p class="metric-description">Recovered inventory money</p>
+        </article>
+        <article class="metric-card">
+          <p class="metric-label">Reinvestment profit</p>
+          <h2 id="reinvestmentValue">$0.00</h2>
+          <p class="metric-description">Profit reserved for growth</p>
+        </article>
+        <article class="metric-card">
+          <p class="metric-label">Personal fund</p>
+          <h2 id="personalValue">$0.00</h2>
+          <p class="metric-description">Your share of profits</p>
+        </article>
+        <article class="metric-card">
+          <p class="metric-label">Pending payouts</p>
+          <h2 id="pendingValue">$0.00</h2>
+          <p class="metric-description">Sales awaiting payment</p>
+        </article>
+      </section>
+      <section class="secondary-metric">
+        <div>
+          <p class="metric-label">Lifetime profit</p>
+          <h2 id="lifetimeProfitValue">$0.00</h2>
+        </div>
+        <p class="muted">Total recorded profit and loss from paid sales</p>
+      </section>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-button active" data-page="home" type="button">Home</button>
+        <button class="nav-button" data-page="inventory" type="button">Inventory</button>
+        <button class="nav-button" data-page="add" type="button">Add item</button>
+        <button class="nav-button" data-page="pending" type="button">Pending</button>
+        <button class="nav-button" data-page="sold" type="button">Sold</button>
+      </nav>
+      <section id="page-home" class="page active">
+        <div class="section-heading">
+          <div>
+            <h2>Recent inventory</h2>
+            <p class="muted">Your latest items and their status.</p>
+          </div>
+          <button class="text-button" data-go="inventory" type="button">View inventory</button>
+        </div>
+        <div id="recentInventory" class="item-list"></div>
+      </section>
+      <section id="page-inventory" class="page">
+        <div class="section-heading">
+          <div>
+            <h2>Inventory</h2>
+            <p class="muted">Everything you currently have available to sell.</p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <input id="inventorySearch" type="search" placeholder="Search inventory..." aria-label="Search inventory">
+          <select id="categoryFilter" aria-label="Filter by category">
+            <option value="all">All categories</option>
+            <option value="pokemon">Pokémon cards</option>
+            <option value="sports">Sports cards</option>
+            <option value="trading">Other trading cards</option>
+            <option value="videogames">Video games</option>
+            <option value="electronics">Electronics</option>
+            <option value="clothing">Clothing</option>
+            <option value="collectibles">Collectibles</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div id="inventoryList" class="item-list"></div>
+      </section>
+      <section id="page-add" class="page">
+        <div class="section-heading">
+          <div>
+            <h2>Add inventory item</h2>
+            <p class="muted">Each physical item gets its own record and purchase cost.</p>
+          </div>
+        </div>
+        <form id="itemForm" class="form-card">
+          <div class="form-grid">
+            <label class="field full-width">
+              Item name *
+              <input id="itemName" name="itemName" type="text" placeholder="e.g. Charizard ex, PS5 controller" required>
+            </label>
+            <label class="field">
+              Category *
+              <select id="productCategory" name="productCategory" required>
+                <option value="pokemon">Pokémon cards</option>
+                <option value="sports">Sports cards</option>
+                <option value="trading">Other trading cards</option>
+                <option value="videogames">Video games</option>
+                <option value="electronics">Electronics</option>
+                <option value="clothing">Clothing</option>
+                <option value="collectibles">Collectibles</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="field">
+              Purchase cost ($) *
+              <input id="purchaseCost" name="purchaseCost" type="number" min="0" step="0.01" placeholder="0.00" required>
+            </label>
+            <label class="field">
+              Purchase date *
+              <input id="purchaseDate" name="purchaseDate" type="date" required>
+            </label>
+            <label class="field">
+              Item condition
+              <select id="itemCondition" name="itemCondition">
+                <option value="Not specified">Not specified</option>
+                <option value="New">New</option>
+                <option value="Like new">Like new</option>
+                <option value="Excellent">Excellent</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor</option>
+                <option value="Damaged">Damaged</option>
+              </select>
+            </label>
+            <div id="cardFields" class="conditional-fields full-width">
+              <h3>Trading card details</h3>
+              <label class="field">
+                Card status
+                <select id="cardType" name="cardType">
+                  <option value="raw">Raw / ungraded</option>
+                  <option value="graded">Graded</option>
+                </select>
+              </label>
+              <div id="gradingFields" class="form-grid">
+                <label class="field">
+                  Grading company
+                  <select id="gradingCompany" name="gradingCompany">
+                    <option value="">Not graded</option>
+                    <option value="PSA">PSA</option>
+                    <option value="CGC">CGC</option>
+                    <option value="BGS">BGS</option>
+                    <option value="SGC">SGC</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+                <label class="field">
+                  Grade
+                  <input id="cardGrade" name="cardGrade" type="text" placeholder="e.g. 10">
+                </label>
+                <label class="field full-width">
+                  Certification number
+                  <input id="certNumber" name="certNumber" type="text" placeholder="Optional">
+                </label>
+              </div>
+            </div>
+            <label class="field full-width">
+              Item photo
+              <input id="itemPhoto" name="itemPhoto" type="file" accept="image/*">
+              <span class="field-help">Optional. Photos are stored in this browser in the starter version.</span>
+            </label>
+            <label class="field full-width">
+              Notes
+              <textarea id="itemNotes" name="itemNotes" rows="3" placeholder="Optional details, source, or other costs..."></textarea>
+            </label>
+          </div>
+          <button class="primary-button full-button" type="submit">Save item</button>
+          <p id="formMessage" class="form-message" role="status"></p>
+        </form>
+      </section>
+      <section id="page-pending" class="page">
+        <div class="section-heading">
+          <div>
+            <h2>Pending payouts</h2>
+            <p class="muted">Sales recorded but not yet marked as paid.</p>
+          </div>
+        </div>
+        <div id="pendingList" class="item-list"></div>
+      </section>
+      <section id="page-sold" class="page">
+        <div class="section-heading">
+          <div>
+            <h2>Sold items</h2>
+            <p class="muted">Completed sales and their recorded results.</p>
+          </div>
+        </div>
+        <div id="soldList" class="item-list"></div>
+      </section>
+      <section id="itemDetails" class="details-panel hidden">
+        <div class="section-heading">
+          <div>
+            <h2 id="detailsTitle">Item details</h2>
+            <p id="detailsSubtitle" class="muted"></p>
+          </div>
+          <button id="closeDetails" class="text-button" type="button">Close</button>
+        </div>
+        <div id="detailsContent"></div>
+      </section>
+    </main>
+    <footer class="footer">
+      <p>ResellLedger · Personal resale tracking</p>
+      <p>Starter version: data is stored locally in this browser.</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
