@@ -11,16 +11,19 @@
   --green: #76d6a1;
   --red: #ff8585;
   --radius: 16px;
+  --nav-height: 76px;
 }
 * {
   box-sizing: border-box;
 }
 html {
   scroll-behavior: smooth;
+  scroll-padding-bottom: calc(var(--nav-height) + 24px);
 }
 body {
   margin: 0;
   min-height: 100vh;
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);
   background: var(--background);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -35,6 +38,7 @@ textarea {
 }
 button {
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 button:focus-visible,
 input:focus-visible,
@@ -58,7 +62,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 5%;
+  padding: 18px 5%;
   border-bottom: 1px solid var(--border);
 }
 .brand {
@@ -96,14 +100,14 @@ button:disabled {
   background: var(--green);
 }
 .main-content {
-  padding: 38px 5% 60px;
+  padding: 34px 5% 48px;
 }
 .welcome-section {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
 }
 .eyebrow {
   margin: 0 0 8px;
@@ -166,7 +170,7 @@ h3 {
 }
 .metric-card {
   min-width: 0;
-  padding: 22px;
+  padding: 21px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -213,23 +217,32 @@ h3 {
   font-size: 12px;
   text-align: right;
 }
+/* Fixed navigation at the bottom */
 .main-nav {
+  position: fixed;
+  z-index: 1000;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
-  gap: 7px;
-  overflow-x: auto;
-  margin: 36px 0 27px;
-  padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 13px;
-  background: var(--surface);
-  scrollbar-width: thin;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--nav-height);
+  padding: 10px max(12px, calc((100vw - 900px) / 2));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: rgba(20, 21, 27, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 .nav-button {
-  flex: 1 0 auto;
-  min-height: 40px;
-  padding: 9px 16px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 180px;
+  min-height: 45px;
+  padding: 9px 12px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 11px;
   background: transparent;
   color: var(--muted);
   font-size: 13px;
@@ -246,7 +259,7 @@ h3 {
 }
 .page {
   display: none;
-  animation: fade-in 0.2s ease;
+  animation: fade-in 0.16s ease;
 }
 .page.active {
   display: block;
@@ -254,11 +267,9 @@ h3 {
 @keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 .section-heading {
@@ -481,43 +492,110 @@ textarea {
   margin-bottom: 0;
   font-size: 13px;
 }
+/* Compact item details overlay */
 .details-panel {
-  margin-top: 30px;
-  padding: 22px;
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 760px;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 0;
   background: var(--surface);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.72);
+  animation: details-in 0.18s ease;
 }
 .details-panel.hidden {
   display: none;
 }
+@keyframes details-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.details-panel .section-heading {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  margin: -20px -20px 18px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.details-panel .section-heading h2 {
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+.details-panel .section-heading .muted {
+  font-size: 11px;
+}
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 9px;
+  margin-bottom: 18px;
 }
 .detail-box {
-  padding: 13px;
+  min-width: 0;
+  padding: 11px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--background);
 }
 .detail-box span {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 .detail-box strong {
+  display: block;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 13px;
+}
+.details-photo {
+  display: block;
+  width: 100%;
+  max-height: 210px;
+  margin: 0 auto 14px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--background);
+}
+.details-notes {
+  margin: 0 0 18px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--background);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .detail-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 14px;
+}
+.detail-actions button {
+  flex: 1 1 auto;
 }
 .secondary-button,
 .danger-button {
@@ -541,8 +619,8 @@ textarea {
 .sale-form {
   display: grid;
   gap: 14px;
-  margin-top: 20px;
-  padding-top: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid var(--border);
 }
 .sale-form .form-grid {
@@ -570,6 +648,28 @@ textarea {
 .footer p {
   margin-bottom: 0;
 }
+@media (min-width: 761px) {
+  .details-panel {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    height: min(84vh, 850px);
+    border-radius: 18px;
+    transform: translate(-50%, -50%);
+    animation: details-desktop-in 0.18s ease;
+  }
+  @keyframes details-desktop-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% + 12px));
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+  }
+}
 @media (max-width: 1000px) {
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -579,22 +679,25 @@ textarea {
   }
 }
 @media (max-width: 600px) {
+  :root {
+    --nav-height: 68px;
+  }
   .topbar {
-    padding: 16px 5%;
+    padding: 14px 5%;
   }
   .brand {
-    font-size: 17px;
+    font-size: 16px;
   }
   .topbar-right {
     font-size: 10px;
   }
   .main-content {
-    padding-top: 28px;
+    padding-top: 25px;
   }
   .welcome-section {
     align-items: flex-start;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
   }
   .welcome-section .primary-button {
     width: 100%;
@@ -603,7 +706,7 @@ textarea {
     gap: 10px;
   }
   .metric-card {
-    padding: 15px;
+    padding: 14px;
   }
   .metric-label {
     font-size: 11px;
@@ -621,10 +724,15 @@ textarea {
     text-align: left;
   }
   .main-nav {
-    margin-top: 25px;
+    gap: 3px;
+    padding: 7px 5px;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom));
   }
   .nav-button {
-    padding: 9px 12px;
+    min-height: 44px;
+    padding: 8px 3px;
+    border-radius: 9px;
+    font-size: 11px;
   }
   .toolbar {
     flex-direction: column;
@@ -664,8 +772,24 @@ textarea {
   .section-heading {
     align-items: flex-start;
   }
+  .details-panel {
+    padding: 14px;
+    padding-top: calc(14px + env(safe-area-inset-top));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .details-panel .section-heading {
+    top: calc(-14px - env(safe-area-inset-top));
+    margin: calc(-14px - env(safe-area-inset-top)) -14px 14px;
+    padding: 14px;
+  }
   .detail-grid {
-    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .detail-box {
+    padding: 9px;
+  }
+  .detail-box strong {
+    font-size: 12px;
   }
   .footer {
     flex-direction: column;
