@@ -1128,6 +1128,26 @@ textarea::placeholder {
   display: none !important;
 }
 
+.auth-locked { display: none !important; }
+.auth-gate {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  background: #101010; color: #f4f4f4;
+}
+.auth-card {
+  width: min(100%, 440px); padding: 32px; border: 1px solid #34383a;
+  border-radius: 18px; background: #17191a; box-shadow: 0 24px 80px #0008;
+}
+.auth-card h1 { margin: 8px 0; }
+.auth-card label { display: block; margin: 18px 0 7px; color: #c9ced1; }
+.auth-card input {
+  box-sizing: border-box; width: 100%; min-height: 46px; padding: 10px 12px;
+  color: #f4f4f4; background: #101010; border: 1px solid #454b50; border-radius: 9px;
+}
+.auth-actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+.auth-actions button { flex: 1; min-width: 130px; }
+.account-button { margin-right: 10px; }
+.auth-card .form-message { min-height: 1.4em; }
+
 .details-panel {
   width: 100%;
   max-width: 620px;
