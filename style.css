@@ -1758,6 +1758,7 @@ textarea::placeholder {
 
 .mobile-account-link { display: none; }
 .account-panel, .ebay-import-panel { margin-bottom: 18px; }
+.account-reset-panel { margin-bottom: 18px; }
 .account-panel .page-description { margin-bottom: 0; }
 .ebay-preview-table { min-width: 820px; }
 .ebay-preview-table td:first-child, .ebay-preview-table th:first-child { text-align: center; }

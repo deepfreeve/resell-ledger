@@ -2471,6 +2471,104 @@ async function loadAccountData(user) {
   renderAll();
 }
 
+async function listPhotoStorageEntries(path) {
+  const storage = supabaseClient.storage.from(PHOTO_BUCKET);
+  const entries = [];
+  const limit = 1000;
+  for (let offset = 0; ; offset += limit) {
+    const { data: page, error } = await storage.list(path, {
+      limit,
+      offset,
+      sortBy: { column: "name", order: "asc" }
+    });
+    if (error) throw error;
+    const batch = Array.isArray(page) ? page : [];
+    entries.push(...batch);
+    if (batch.length < limit) break;
+  }
+  return entries;
+}
+
+async function deleteAccountPhotos(userId) {
+  const storage = supabaseClient.storage.from(PHOTO_BUCKET);
+  const rootEntries = await listPhotoStorageEntries(userId);
+  const paths = [];
+
+  for (const entry of rootEntries) {
+    if (entry.id == null) {
+      const itemEntries = await listPhotoStorageEntries(userId + "/" + entry.name);
+      paths.push(...itemEntries
+        .filter((photo) => photo.id != null)
+        .map((photo) => userId + "/" + entry.name + "/" + photo.name));
+    } else {
+      paths.push(userId + "/" + entry.name);
+    }
+  }
+
+  for (let index = 0; index < paths.length; index += 1000) {
+    const { error } = await storage.remove(paths.slice(index, index + 1000));
+    if (error) throw error;
+  }
+}
+
+async function resetAccountData() {
+  const button = $("#resetAccountDataButton");
+  const message = $("#accountResetMessage");
+  const userId = supabaseUser?.id;
+  if (!userId) {
+    message.textContent = "Sign in before resetting account data.";
+    message.classList.add("error");
+    return;
+  }
+  if (!window.confirm(
+    "Permanently reset this CACHE account? This clears all inventory, sales, balances, custom categories, and stored item photos. This cannot be undone."
+  )) return;
+
+  button.disabled = true;
+  message.textContent = "Resetting account data…";
+  message.classList.remove("error");
+  try {
+    await remoteSaveQueue;
+    const emptyData = createEmptyData();
+    const { error } = await supabaseClient
+      .from(CLOUD_TABLE)
+      .upsert({ user_id: userId, payload: emptyData }, { onConflict: "user_id" });
+    if (error) throw error;
+
+    data = emptyData;
+    for (const key of Object.keys(CATEGORY_NAMES)) {
+      if (key.startsWith("custom_")) delete CATEGORY_NAMES[key];
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY + ":" + userId, JSON.stringify(emptyData));
+    } catch (cacheError) {
+      console.warn("The cleared account cache could not be updated:", cacheError);
+    }
+    ebayImportRows = [];
+    $("#ebayCsvFile").value = "";
+    signedPhotoUrls.clear();
+    updateCategoryOptions();
+    renderEbayPreview();
+    renderAll();
+
+    message.textContent = "Account data cleared. Removing stored item photos…";
+    try {
+      await deleteAccountPhotos(userId);
+      message.textContent = "Account data and stored item photos have been reset.";
+    } catch (photoError) {
+      console.error("Could not remove every account photo:", photoError);
+      message.textContent = "Account data was cleared, but some stored photos could not be removed. Try again or contact support.";
+      message.classList.add("error");
+    }
+  } catch (error) {
+    console.error("Could not reset account data:", error);
+    message.textContent = error.message || "Could not reset account data. Please try again.";
+    message.classList.add("error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleAuthSession(session) {
   const user = session?.user || null;
   if (!user) {
@@ -2541,6 +2639,7 @@ async function signOut() {
 
 $("#signOutButton").addEventListener("click", signOut);
 $("#accountSignOutButton").addEventListener("click", signOut);
+$("#resetAccountDataButton").addEventListener("click", resetAccountData);
 
 supabaseClient.auth.onAuthStateChange((_event, session) => {
   window.setTimeout(() => handleAuthSession(session), 0);

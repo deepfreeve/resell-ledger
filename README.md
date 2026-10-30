@@ -13,6 +13,7 @@ Record recovered capital and split positive profit equally between reinvestment 
 View completed sales and lifetime profit
 Review monthly and category profit reports, export sales CSVs, and back up or restore account data
 Import eBay order/sales CSVs from the account page, with preview and duplicate checks
+Reset account inventory, sales, balances, categories, and stored item photos
 Search and filter available inventory
 Duplicate item details when purchasing multiple copies
 Project files

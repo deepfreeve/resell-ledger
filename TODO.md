@@ -13,6 +13,7 @@
 - [x] Add a Your account page under Management.
 - [x] Import eBay sales CSVs with a review step, duplicate checks, and SKU/title inventory matching.
 - [x] Keep unmatched imported sales out of profit totals until their purchase cost is added.
+- [x] Add a confirmed reset for account data and private item photos.
 
 ## Future improvements
 
