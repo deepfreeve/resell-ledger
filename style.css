@@ -1743,6 +1743,27 @@ textarea::placeholder {
 }
 
 .financial-reports-panel { margin-top: 24px; }
+.sync-status { border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: transparent; color: #92969b; padding: 7px 10px; font-size: 11px; cursor: pointer; }
+.sync-status[data-state="saved"] { color: #39d98a; }
+.sync-status[data-state="error"] { color: #ff8b7a; border-color: rgba(255,139,122,.45); }
+.report-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0 8px; }
+.report-filters label, .ebay-estimate-control { display: flex; flex-direction: column; gap: 6px; color: #b9bec2; font-size: 12px; }
+.report-filters input, .report-filters select { min-height: 38px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: #17191a; color: #f3f4f4; }
+.ebay-estimate-control { margin: 10px 0 16px; max-width: 520px; }
+.ebay-estimate-control input, .sale-payout-allocation input[type="range"], #saleReinvestmentPercent { width: 100%; accent-color: #efff00; }
+.ebay-estimate-control small { color: #92969b; }
+.sale-payout-allocation { margin: 16px 0; padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(255,255,255,.025); }
+.photo-preview-wrap { display: flex; align-items: center; gap: 14px; margin: 14px 0; }
+.photo-preview-wrap[hidden] { display: none; }
+.photo-preview-wrap img { width: 140px; height: 140px; object-fit: contain; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: #0d0e0e; }
+.photo-preview-wrap .form-message { margin: 0; }
+.photo-retry-button { position: absolute; z-index: 1; bottom: 8px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 5px 8px; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; background: #17191a; color: #efff00; font-size: 11px; cursor: pointer; }
+.item-thumbnail, .details-photo { position: relative; }
+.item-thumbnail .photo-retry-button { bottom: 4px; }
+.details-photo.photo-load-error { opacity: .35; }
+.reset-backup-option { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: #c6c9cc; font-size: 13px; }
+.reset-backup-option input { accent-color: #efff00; }
+.auth-card .text-button { display: block; margin: 12px auto 0; border: 0; background: none; color: #efff00; cursor: pointer; }
 .report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .report-table-wrap { width: 100%; overflow-x: auto; margin-top: 12px; }
 .report-table { width: 100%; min-width: 690px; border-collapse: collapse; text-align: right; }
@@ -1775,4 +1796,9 @@ textarea::placeholder {
 @media (max-width: 700px) {
   .mobile-account-link { display: inline-flex; padding: 7px 9px; font-size: 11px; }
   .topbar-right { gap: 6px; }
+  .sync-status { padding: 6px 8px; font-size: 10px; }
+  .report-filters { display: grid; grid-template-columns: 1fr 1fr; }
+  .report-filters label { min-width: 0; }
+  .report-filters input, .report-filters select { width: 100%; }
+  .photo-preview-wrap { align-items: flex-start; flex-direction: column; }
 }

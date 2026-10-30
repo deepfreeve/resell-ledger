@@ -14,6 +14,9 @@ const supabaseClient = window.supabase.createClient(
 let supabaseUser = null;
 let loadedUserId = null;
 let remoteSaveQueue = Promise.resolve();
+let lastCloudSave = Promise.resolve(true);
+let cloudSyncState = "saved";
+let passwordRecoveryPending = false;
 
 const CATEGORY_NAMES = {
   pokemon: "Pokémon cards",
@@ -59,6 +62,7 @@ let ebayImportRows = [];
 
 function createEmptyData() {
   return {
+    accountingVersion: 2,
     items: [],
     sales: [],
     customCategories: [],
@@ -71,7 +75,8 @@ function createEmptyData() {
 }
 
 function normalizeData(saved) {
-  return {
+  const normalized = {
+    accountingVersion: Number(saved?.accountingVersion) || 1,
     items: Array.isArray(saved?.items) ? saved.items : [],
     sales: Array.isArray(saved?.sales) ? saved.sales : [],
     customCategories: Array.isArray(saved?.customCategories)
@@ -82,6 +87,12 @@ function normalizeData(saved) {
       personal: Number(saved?.funds?.personal) || 0
     }
   };
+  if (normalized.accountingVersion < 2) {
+    normalized.funds.reinvestment += normalized.funds.capital;
+    normalized.funds.capital = 0;
+    normalized.accountingVersion = 2;
+  }
+  return normalized;
 }
 
 function loadData(storageKey = STORAGE_KEY) {
@@ -117,19 +128,46 @@ function saveData() {
     console.warn("Local cache could not be updated:", error);
   }
 
-  remoteSaveQueue = remoteSaveQueue.then(async () => {
+  setCloudSyncState("syncing");
+  lastCloudSave = remoteSaveQueue = remoteSaveQueue.then(async () => {
     const { error } = await supabaseClient
       .from(CLOUD_TABLE)
       .upsert({ user_id: userId, payload: snapshot }, { onConflict: "user_id" });
     if (error) throw error;
+    setCloudSyncState("saved");
+    return true;
   }).catch((error) => {
     console.error("Cloud save failed:", error);
-    const status = $("#toast");
-    status.textContent = "Cloud sync failed. Check your connection before closing this page.";
-    status.classList.add("show");
-    window.setTimeout(() => status.classList.remove("show"), 5000);
+    setCloudSyncState("error", error.message);
+    return false;
   });
   return true;
+}
+
+function setCloudSyncState(state, detail = "") {
+  cloudSyncState = state;
+  const badge = $("#cloudSyncStatus");
+  if (!badge) return;
+  const labels = { saved: "Synced", syncing: "Syncing…", error: "Sync needs attention" };
+  badge.textContent = labels[state] || "Sync status unknown";
+  badge.dataset.state = state;
+  badge.title = detail || labels[state] || "";
+  badge.setAttribute("aria-label", detail ? `${labels[state]}: ${detail}` : labels[state]);
+}
+
+async function retryCloudSync() {
+  if (!supabaseUser) return;
+  setCloudSyncState("syncing");
+  try {
+    const snapshot = JSON.parse(JSON.stringify(data));
+    const { error } = await supabaseClient.from(CLOUD_TABLE)
+      .upsert({ user_id: supabaseUser.id, payload: snapshot }, { onConflict: "user_id" });
+    if (error) throw error;
+    setCloudSyncState("saved");
+  } catch (error) {
+    console.error("Cloud sync retry failed:", error);
+    setCloudSyncState("error", error.message);
+  }
 }
 
 /* =========================================
@@ -217,26 +255,36 @@ function lifetimeProfit() {
     .reduce((total, sale) => total + saleProfit(sale), 0);
 }
 
+function saleCostBreakdown(sale, item) {
+  const purchase = Number(item?.purchaseCost) || 0;
+  const fees = Number(sale.platformFees) || 0;
+  const shipping = Number(sale.shipping) || 0;
+  const other = Number(sale.otherCosts) || 0;
+  const net = netProceeds(sale);
+  const reinvestmentFirst = Math.round(Math.max(0, Math.min(net, purchase + fees + shipping + other)) * 100) / 100;
+  const profit = Math.round(Math.max(0, net - purchase - fees - shipping - other) * 100) / 100;
+  const configuredPercent = Number(sale.reinvestmentPercent);
+  const reinvestmentPercent = sale.reinvestmentPercent == null || sale.reinvestmentPercent === "" || !Number.isFinite(configuredPercent)
+    ? 50 : Math.max(0, Math.min(100, configuredPercent));
+  const profitReinvestment = Math.round(profit * reinvestmentPercent) / 100;
+  return {
+    purchase, fees, shipping, other, net, reinvestmentFirst, profit,
+    reinvestmentPercent,
+    reinvestmentAdded: Math.round((reinvestmentFirst + profitReinvestment) * 100) / 100,
+    personalAdded: Math.round((profit - profitReinvestment) * 100) / 100
+  };
+}
+
 function allocatePaidSaleFunds(sale, item) {
   if (!item || item.purchaseCostUnknown) return;
-  const net = netProceeds(sale);
-  const cost = Number(item.purchaseCost) || 0;
-  const recovered = Math.round(Math.max(0, Math.min(net, cost)) * 100) / 100;
-  const profit = Math.max(0, Math.round((net - cost) * 100) / 100);
-  const configuredPercent = Number(sale.reinvestmentPercent);
-  const reinvestmentPercent = sale.reinvestmentPercent == null ||
-    sale.reinvestmentPercent === "" || !Number.isFinite(configuredPercent)
-    ? 50
-    : Math.max(0, Math.min(100, configuredPercent));
-  const reinvestment = Math.round(profit * reinvestmentPercent) / 100;
-  const personal = Math.round((profit - reinvestment) * 100) / 100;
-  data.funds.capital += recovered;
-  data.funds.reinvestment += reinvestment;
-  data.funds.personal += personal;
-  sale.capitalRecovered = recovered;
-  sale.reinvestmentPercent = reinvestmentPercent;
-  sale.reinvestmentAdded = reinvestment;
-  sale.personalAdded = personal;
+  const allocation = saleCostBreakdown(sale, item);
+  data.funds.reinvestment += allocation.reinvestmentAdded;
+  data.funds.personal += allocation.personalAdded;
+  sale.capitalRecovered = allocation.reinvestmentFirst;
+  sale.reinvestmentPercent = allocation.reinvestmentPercent;
+  sale.reinvestmentAdded = allocation.reinvestmentAdded;
+  sale.personalAdded = allocation.personalAdded;
+  sale.allocationVersion = 2;
   sale.fundsAllocated = true;
 }
 
@@ -393,7 +441,7 @@ function updateDashboard() {
   );
 
   const lifetimeInventorySpend = data.items.reduce(
-    (total, item) => total + Number(item.purchaseCost || 0),
+    (total, item) => total + (!item.purchaseCostUnknown && !item.purchaseCostEstimated ? Number(item.purchaseCost || 0) : 0),
     0
   );
 
@@ -426,7 +474,30 @@ function updateDashboard() {
 function renderFinancialReports() {
   const byMonth = new Map();
   const byCategory = new Map();
-  data.sales.forEach((sale) => {
+  const from = $("#reportDateFrom")?.value || "";
+  const to = $("#reportDateTo")?.value || "";
+  const categoryFilter = $("#reportCategoryFilter")?.value || "all";
+  const platformFilter = $("#reportPlatformFilter")?.value || "all";
+  const filteredSales = data.sales.filter((sale) => {
+    const date = String(sale.saleDate || sale.createdAt || "").slice(0, 10);
+    const item = data.items.find((entry) => entry.id === sale.itemId);
+    const category = item ? item.productCategory : "other";
+    const platform = sale.source === "ebay" ? "ebay" : (sale.platform || "other");
+    return (!from || date >= from) && (!to || date <= to) &&
+      (categoryFilter === "all" || categoryFilter === category) &&
+      (platformFilter === "all" || platformFilter === platform);
+  });
+  data.customCategories.forEach((category) => {
+    if (![...$("#reportCategoryFilter").options].some((option) => option.value === category.id)) {
+      $("#reportCategoryFilter").add(new Option(category.name, category.id));
+    }
+  });
+  Object.entries(CATEGORY_NAMES).forEach(([id, name]) => {
+    if (![...$("#reportCategoryFilter").options].some((option) => option.value === id)) {
+      $("#reportCategoryFilter").add(new Option(name, id));
+    }
+  });
+  filteredSales.forEach((sale) => {
     const month = String(sale.saleDate || sale.createdAt || "").slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(month)) return;
     const item = data.items.find((entry) => entry.id === sale.itemId);
@@ -467,6 +538,23 @@ function renderFinancialReports() {
     <table class="report-table"><thead><tr><th>Category</th><th>Paid sales</th><th>Gross revenue</th><th>Realized profit</th><th>Cost unknown</th></tr></thead>
     <tbody>${categories.map(([category, row]) => `<tr><th>${escapeHtml(category)}</th><td>${row.count}</td><td>${money(row.sales)}</td><td>${money(row.profit)}</td><td>${row.unknownCosts}</td></tr>`).join("")}</tbody></table>`
     : '<p class="muted-text">Paid sales by category will appear here.</p>';
+
+  const byPlatform = new Map();
+  filteredSales.filter((sale) => sale.status === "paid").forEach((sale) => {
+    const platform = sale.source === "ebay" ? "eBay" : (sale.platform || "Other");
+    const row = byPlatform.get(platform) || { count: 0, gross: 0, costs: 0, profit: 0, unknown: 0 };
+    row.count += 1;
+    row.gross += Number(sale.salePrice || 0);
+    row.costs += Number(sale.platformFees || 0) + Number(sale.shipping || 0) + Number(sale.otherCosts || 0);
+    const profit = saleProfit(sale);
+    if (profit == null) row.unknown += 1;
+    else row.profit += profit;
+    byPlatform.set(platform, row);
+  });
+  $("#platformProfitReport").innerHTML = byPlatform.size ? `
+    <table class="report-table"><thead><tr><th>Platform</th><th>Paid sales</th><th>Gross revenue</th><th>Fees & shipping</th><th>Net profit</th><th>Cost unknown</th></tr></thead>
+    <tbody>${[...byPlatform].map(([platform, row]) => `<tr><th>${escapeHtml(platform)}</th><td>${row.count}</td><td>${money(row.gross)}</td><td>${money(row.costs)}</td><td>${money(row.profit)}</td><td>${row.unknown}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted-text">Paid sales by platform will appear here.</p>';
 }
 
 function downloadFile(filename, contents, type) {
@@ -485,15 +573,15 @@ function csvCell(value) {
 }
 
 function exportSalesCsv() {
-  const headers = ["Item", "Category", "Sale date", "Sale date source", "Status", "Sale price", "Platform fees", "Shipping", "Other costs", "Net proceeds", "Purchase cost", "Realized profit"];
+  const headers = ["Item", "Category", "Platform", "Sale date", "Sale date source", "Status", "Sale price", "Platform fees", "Shipping", "Other costs", "Net proceeds", "Purchase cost", "Purchase cost estimated", "Realized profit"];
   const rows = data.sales.map((sale) => {
     const item = data.items.find((entry) => entry.id === sale.itemId);
     const saleDateSource = sale.saleDateEstimated
       ? `Estimated from eBay report through ${sale.saleReportEndDate || sale.saleDate}`
       : "Recorded sale date";
-    return [item?.name || "", item ? categoryName(item) : "Other", sale.saleDate, saleDateSource, sale.status,
+    return [item?.name || "", item ? categoryName(item) : "Other", sale.source === "ebay" ? "eBay" : (sale.platform || "Other"), sale.saleDate, saleDateSource, sale.status,
       sale.salePrice, sale.platformFees, sale.shipping, sale.otherCosts, netProceeds(sale),
-      item?.purchaseCost || 0, sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
+      item?.purchaseCost || 0, item?.purchaseCostEstimated ? "Yes" : "No", sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
   downloadFile(`cache-sales-${todayString()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
@@ -790,7 +878,10 @@ function parseEbayCsv(text) {
         shipping: listingReport ? (shippingCostParts[unitIndex] || 0) : 0,
         purchaseCost: availableItem && !availableItem.purchaseCostUnknown
           ? Number(availableItem.purchaseCost) || 0
-          : "",
+          : Math.round(Math.max(0, listingReport
+            ? ((itemSalesParts[unitIndex] || 0) + (shippingRevenueParts[unitIndex] || 0))
+            : (itemSales || 0)) * (Number($("#ebayEstimatePercent")?.value || 50) / 100) * 100) / 100,
+        purchaseCostEstimated: !(availableItem && !availableItem.purchaseCostUnknown),
         reinvestmentPercent: 50,
         status: /unpaid|awaitingpayment|paymentpending/.test(normalizeCsvHeader(statusText)) ? "pending" : "paid",
         importKey,
@@ -809,8 +900,8 @@ function renderEbayPreview() {
     Number.isFinite(Number(row.purchaseCost)) && Number(row.purchaseCost) >= 0;
   const stateLabel = (row) => ({
     ready: row.matchedItemId
-      ? `Match: ${data.items.find((item) => item.id === row.matchedItemId)?.name || "inventory"}${hasCost(row) ? "" : " · cost unknown"}`
-      : (hasCost(row) ? "Add sold item" : "Add sold item; cost unknown"),
+      ? `Match: ${data.items.find((item) => item.id === row.matchedItemId)?.name || "inventory"}${row.purchaseCostEstimated ? " · cost estimated" : ""}`
+      : (row.purchaseCostEstimated ? "Add sold item · cost estimated" : (hasCost(row) ? "Add sold item" : "Add sold item; cost unknown")),
     duplicate: "Already imported",
     cancelled: "Cancelled/refunded; skipped",
     invalid: "Missing sale price or date",
@@ -821,8 +912,8 @@ function renderEbayPreview() {
   const selected = selectable.filter((row) => row.include).length;
   $("#ebayPreview").innerHTML = rows.length ? `
     <table class="report-table ebay-preview-table">
-      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Bought cost</th><th>Fees</th><th>Shipping cost</th><th>Profit split</th><th>Import action</th></tr></thead>
-      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" placeholder="Unknown" aria-label="Bought cost for ${escapeHtml(row.title)}" data-ebay-cost="${index}" value="${hasCost(row) ? escapeHtml(row.purchaseCost) : ""}" ${row.state === "ready" ? "" : "disabled"}></td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td><div class="ebay-split-control"><input type="range" min="0" max="100" step="1" aria-label="Reinvestment percentage for ${escapeHtml(row.title)}" data-ebay-percent="${index}" value="${row.reinvestmentPercent ?? 50}" ${row.state === "ready" ? "" : "disabled"}><small data-ebay-percent-label="${index}">${row.reinvestmentPercent ?? 50}% reinvest · ${100 - (row.reinvestmentPercent ?? 50)}% personal</small></div></td><td data-ebay-action-label="${index}">${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
+      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Bought cost</th><th>Estimated profit</th><th>Fees</th><th>Shipping cost</th><th>Profit split</th><th>Import action</th></tr></thead>
+      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" placeholder="Bought cost" aria-label="Bought cost for ${escapeHtml(row.title)}" data-ebay-cost="${index}" value="${hasCost(row) ? escapeHtml(row.purchaseCost) : ""}" ${row.state === "ready" ? "" : "disabled"}>${row.purchaseCostEstimated ? `<small class="import-sku">Estimated · ${$("#ebayEstimatePercent").value}%</small>` : ""}</td><td>${row.purchaseCostUnknown ? "—" : money(Number(row.price || 0) - Number(row.purchaseCost || 0) - Number(row.fees || 0) - Number(row.shipping || 0))}${row.purchaseCostEstimated ? '<small class="import-sku">Estimate</small>' : ""}</td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td><div class="ebay-split-control"><input type="range" min="0" max="100" step="1" aria-label="Reinvestment percentage for ${escapeHtml(row.title)}" data-ebay-percent="${index}" value="${row.reinvestmentPercent ?? 50}" ${row.state === "ready" ? "" : "disabled"}><small data-ebay-percent-label="${index}">${row.reinvestmentPercent ?? 50}% reinvest · ${100 - (row.reinvestmentPercent ?? 50)}% personal</small></div></td><td data-ebay-action-label="${index}">${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
     </table>` : "";
   const skipped = rows.length - selectable.length;
   const dateNote = rows.some((row) => row.dateEstimated)
@@ -865,6 +956,7 @@ function updateEbayPreviewInputs(event) {
 
   if (target.matches("[data-ebay-cost]")) {
     row.purchaseCost = target.value === "" ? "" : Number(target.value);
+    row.purchaseCostEstimated = false;
     const actionLabel = $("#ebayPreview").querySelector(`[data-ebay-action-label="${rowIndex}"]`);
     if (actionLabel && row.state === "ready") {
       const hasCost = row.purchaseCost !== "" && Number.isFinite(Number(row.purchaseCost)) && Number(row.purchaseCost) >= 0;
@@ -881,6 +973,16 @@ function updateEbayPreviewInputs(event) {
     if (label) label.textContent = `${row.reinvestmentPercent}% reinvest · ${100 - row.reinvestmentPercent}% personal`;
   }
 }
+
+$("#ebayEstimatePercent").addEventListener("input", (event) => {
+  const percent = Number(event.currentTarget.value);
+  $("#ebayEstimateLabel").textContent = percent + "%";
+  ebayImportRows.forEach((row) => {
+    if (!row.purchaseCostEstimated || row.state !== "ready") return;
+    row.purchaseCost = Math.round(Number(row.price || 0) * percent) / 100;
+  });
+  renderEbayPreview();
+});
 
 function importSelectedEbaySales() {
   const selected = ebayImportRows.filter((row) => row.state === "ready" && row.include);
@@ -913,11 +1015,12 @@ function importSelectedEbaySales() {
           listedPrice: row.price,
           purchaseCost: purchaseCostKnown ? Math.round(Number(row.purchaseCost) * 100) / 100 : 0,
           purchaseCostUnknown: !purchaseCostKnown,
-          purchaseDate: row.dateEstimated ? "" : row.date,
+          purchaseCostEstimated: Boolean(row.purchaseCostEstimated),
+          purchaseDate: "",
           itemCondition: "Not specified",
           photo: "",
           notes: purchaseCostKnown
-            ? "Imported from eBay."
+            ? (row.purchaseCostEstimated ? "Imported from eBay. Purchase cost is an estimate; edit it when you know the actual cost." : "Imported from eBay.")
             : "Imported from eBay. Add the purchase cost to calculate profit accurately.",
           createdAt: new Date().toISOString()
         };
@@ -927,8 +1030,10 @@ function importSelectedEbaySales() {
       if (row.purchaseCost !== "" && row.purchaseCost != null) {
         item.purchaseCost = Math.round(Number(row.purchaseCost) * 100) / 100;
         item.purchaseCostUnknown = false;
+        item.purchaseCostEstimated = Boolean(row.purchaseCostEstimated);
       } else {
         item.purchaseCostUnknown = true;
+        item.purchaseCostEstimated = false;
       }
       const sale = {
         id: makeId(),
@@ -1736,8 +1841,39 @@ async function hydratePhotos(container) {
       }
       await cached.pending;
     }
-    if (cached.url && image.isConnected && image.dataset.photoPath === path) image.src = cached.url;
+    if (cached.url && image.isConnected && image.dataset.photoPath === path) {
+      image.src = cached.url;
+      if (!image.dataset.photoErrorBound) {
+        image.dataset.photoErrorBound = "true";
+        image.addEventListener("error", () => showPhotoLoadError(image, path));
+      }
+    } else if (image.isConnected) {
+      showPhotoLoadError(image, path);
+    }
   }));
+}
+
+function showPhotoLoadError(image, path) {
+  image.classList.add("photo-load-error");
+  image.alt = "Photo could not load. Retry below.";
+  const parent = image.parentElement;
+  if (!parent || parent.querySelector("[data-retry-photo]")) return;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "photo-retry-button";
+  retry.dataset.retryPhoto = path;
+  retry.textContent = "Retry photo";
+  parent.append(retry);
+}
+
+async function retryPhotoLoad(path) {
+  signedPhotoUrls.delete(path);
+  document.querySelectorAll('img[data-photo-path]').forEach((image) => {
+    if (image.dataset.photoPath !== path) return;
+    image.classList.remove("photo-load-error");
+    image.parentElement?.querySelector("[data-retry-photo]")?.remove();
+  });
+  await hydratePhotos(document);
 }
 
 /* =========================================
@@ -1765,7 +1901,7 @@ async function saveItemForm(event) {
   const purchaseCost = Number($("#purchaseCost").value);
   const purchaseDate = $("#purchaseDate").value;
 
-  if (!name || !purchaseDate ||
+  if (!name ||
       (existing?.purchaseCostUnknown && !$("#purchaseCost").value.trim()) ||
       !Number.isFinite(listedPrice) || listedPrice < 0 ||
       !Number.isFinite(purchaseCost) || purchaseCost < 0) {
@@ -1806,7 +1942,8 @@ async function saveItemForm(event) {
       listedPrice: Math.round(listedPrice * 100) / 100,
       purchaseCost: Math.round(purchaseCost * 100) / 100,
       purchaseCostUnknown: false,
-      purchaseDate,
+      purchaseCostEstimated: false,
+      purchaseDate: purchaseDate || "",
       itemCondition: $("#itemCondition").value,
 
       photo: newPhoto !== null
@@ -1860,6 +1997,9 @@ async function saveItemForm(event) {
     delete form.dataset.editingId;
 
     $("#purchaseDate").value = todayString();
+    $("#itemPhotoPreviewWrap").hidden = true;
+    if (itemPhotoPreviewUrl) URL.revokeObjectURL(itemPhotoPreviewUrl);
+    itemPhotoPreviewUrl = "";
     $("#itemFormTitle").textContent = "Add inventory item";
     $("#itemFormSubmit").textContent = "Save item";
 
@@ -1958,7 +2098,7 @@ function openItemDetails(itemId) {
   let html = '<div class="detail-grid">';
 
   html += detailBox("Listed price", money(item.listedPrice || 0));
-  html += detailBox("Purchase cost", item.purchaseCostUnknown ? "Not recorded yet" : money(item.purchaseCost));
+    html += detailBox("Purchase cost", item.purchaseCostUnknown ? "Not recorded yet" : (money(item.purchaseCost) + (item.purchaseCostEstimated ? " (estimate)" : "")));
   html += detailBox("Purchase date", formatDate(item.purchaseDate));
   html += detailBox("Category", categoryName(item));
   if (item.sku) html += detailBox("SKU", item.sku);
@@ -1999,9 +2139,9 @@ function openItemDetails(itemId) {
   if (item.photo) {
     const embeddedPhoto = item.photo.startsWith("data:");
     html += `
-      <img class="details-photo"
+      <div class="details-photo-wrap"><img class="details-photo"
         ${embeddedPhoto ? `src="${escapeHtml(item.photo)}"` : `data-photo-path="${escapeHtml(item.photo)}"`}
-        alt="${escapeHtml(item.name)}">`;
+        alt="${escapeHtml(item.name)}"></div>`;
   }
 
   if (item.notes) {
@@ -2021,6 +2161,7 @@ function openItemDetails(itemId) {
     html += detailBox("Net proceeds", money(netProceeds(sale)));
     html += detailBox("Profit / loss", saleProfit(sale) === null ? "Add purchase cost to calculate" : money(saleProfit(sale)));
     html += detailBox("Sale date", formatDate(sale.saleDate));
+    html += detailBox("Platform", sale.source === "ebay" ? "eBay" : (sale.platform || "Other"));
     if (sale.reinvestmentPercent !== undefined) {
       const reinvestPercent = Math.max(0, Math.min(100, Number(sale.reinvestmentPercent) || 0));
       html += detailBox("Profit split", `${reinvestPercent}% reinvest · ${100 - reinvestPercent}% personal`);
@@ -2046,6 +2187,12 @@ function openItemDetails(itemId) {
 
     if (sale.status === "pending") {
       html += `
+        <div class="sale-payout-allocation">
+          <label class="field" for="pendingReinvestmentPercent">Profit split: <span id="pendingReinvestmentLabel">${Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))}% reinvestment</span>
+            <input id="pendingReinvestmentPercent" type="range" min="0" max="100" step="1" value="${Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))}" data-pending-sale-split="${escapeHtml(sale.id)}">
+          </label>
+          <p class="field-hint" id="pendingAllocationPreview">${item.purchaseCostUnknown ? "Add the bought cost to calculate the allocation." : "Costs are returned to reinvestment first; the slider only splits the remaining profit."}</p>
+        </div>
         <div class="detail-actions">
 
           <button class="primary-button" type="button"
@@ -2117,6 +2264,10 @@ function showSaleForm(itemId) {
 
       <div class="form-grid">
 
+        <label class="field">Platform
+          <select name="platform"><option value="other">Other</option><option value="ebay">eBay</option></select>
+        </label>
+
         <label class="field">
           Sale price ($) *
           <input name="salePrice" type="number"
@@ -2155,6 +2306,10 @@ function showSaleForm(itemId) {
 
       </div>
 
+      <label class="field full-width" for="saleReinvestmentPercent">Profit split: <span id="saleReinvestmentLabel">50% reinvestment · 50% personal</span>
+        <input id="saleReinvestmentPercent" name="reinvestmentPercent" type="range" min="0" max="100" step="1" value="50">
+      </label>
+
       <div class="sale-summary" id="saleEstimate">
         Enter a sale price to estimate proceeds and profit.
       </div>
@@ -2181,17 +2336,21 @@ function showSaleForm(itemId) {
 
   function updateEstimate() {
     const values = new FormData(form);
-
-    const net =
-      Number(values.get("salePrice") || 0) -
-      Number(values.get("platformFees") || 0) -
-      Number(values.get("shipping") || 0) -
-      Number(values.get("otherCosts") || 0);
-
+    const sale = {
+      salePrice: Number(values.get("salePrice") || 0),
+      platformFees: Number(values.get("platformFees") || 0),
+      shipping: Number(values.get("shipping") || 0),
+      otherCosts: Number(values.get("otherCosts") || 0),
+      reinvestmentPercent: Number(values.get("reinvestmentPercent") || 0)
+    };
+    const allocation = saleCostBreakdown(sale, item);
+    $("#saleReinvestmentLabel").textContent = `${allocation.reinvestmentPercent}% reinvestment · ${100 - allocation.reinvestmentPercent}% personal`;
     $("#saleEstimate").innerHTML = `
-      Estimated net proceeds: <strong>${money(net)}</strong><br>
-      Estimated profit / loss:
-      <strong>${money(net - Number(item.purchaseCost))}</strong>`;
+      Net after fees and shipping: <strong>${money(allocation.net)}</strong><br>
+      Returned to reinvestment first (bought cost + sale costs): <strong>${money(allocation.reinvestmentFirst)}</strong><br>
+      Profit after all costs: <strong>${money(allocation.profit)}</strong><br>
+      Additional reinvestment: <strong>${money(allocation.reinvestmentAdded - allocation.reinvestmentFirst)}</strong> ·
+      Personal: <strong>${money(allocation.personalAdded)}</strong>`;
   }
 
   form.addEventListener("input", updateEstimate);
@@ -2309,7 +2468,9 @@ function saveSale(event, itemId) {
     platformFees,
     shipping,
     otherCosts,
+    platform: String(values.get("platform") || "other"),
     saleDate,
+    reinvestmentPercent: Math.max(0, Math.min(100, Number(values.get("reinvestmentPercent") || 0))),
     status: "pending",
     createdAt: new Date().toISOString()
   };
@@ -2340,6 +2501,11 @@ function markSalePaid(saleId) {
   );
 
   if (!item) return;
+
+  const splitInput = $("#pendingReinvestmentPercent");
+  if (splitInput && splitInput.dataset.pendingSaleSplit === sale.id) {
+    sale.reinvestmentPercent = Math.max(0, Math.min(100, Number(splitInput.value) || 0));
+  }
 
   const oldFunds = { ...data.funds };
   const oldSale = { ...sale };
@@ -2449,6 +2615,13 @@ function deleteItem(itemId) {
 document.addEventListener("click", (event) => {
   const target = event.target;
 
+  const retryPhotoButton = target.closest("[data-retry-photo]");
+  if (retryPhotoButton) {
+    event.stopPropagation();
+    retryPhotoLoad(retryPhotoButton.dataset.retryPhoto);
+    return;
+  }
+
   const pageButton = target.closest("[data-page]");
 
   if (pageButton) {
@@ -2527,6 +2700,33 @@ $("#searchItemPhotoButton").addEventListener("click", () => {
 
 $("#itemForm").addEventListener("submit", saveItemForm);
 
+let itemPhotoPreviewUrl = "";
+function previewSelectedItemPhoto(event) {
+  const file = event.currentTarget.files[0];
+  if (!file) return;
+  $("#itemPhoto").value = event.currentTarget.id === "itemCameraPhoto" ? "" : $("#itemPhoto").value;
+  if (!file.type.startsWith("image/") || file.size > 12 * 1024 * 1024) {
+    $("#itemPhotoPreviewWrap").hidden = false;
+    $("#itemPhotoPreviewMessage").textContent = "Choose an image smaller than 12 MB.";
+    $("#itemPhotoPreviewMessage").classList.add("error");
+    return;
+  }
+  if (itemPhotoPreviewUrl) URL.revokeObjectURL(itemPhotoPreviewUrl);
+  itemPhotoPreviewUrl = URL.createObjectURL(file);
+  $("#itemPhotoPreview").src = itemPhotoPreviewUrl;
+  $("#itemPhotoPreviewWrap").hidden = false;
+  $("#itemPhotoPreviewMessage").textContent = "Preview ready. The photo will be saved privately with this item.";
+  $("#itemPhotoPreviewMessage").classList.remove("error");
+}
+$("#itemPhoto").addEventListener("change", (event) => {
+  if (event.currentTarget.files.length) $("#itemCameraPhoto").value = "";
+  previewSelectedItemPhoto(event);
+});
+$("#itemCameraPhoto").addEventListener("change", (event) => {
+  if (event.currentTarget.files.length) $("#itemPhoto").value = "";
+  previewSelectedItemPhoto(event);
+});
+
 $("#productCategory").addEventListener("change", () => {
   if ($("#productCategory").value === "__add_custom__") {
     createCustomCategory();
@@ -2586,6 +2786,7 @@ async function loadAccountData(user) {
   if (error) throw error;
 
   const accountKey = `${STORAGE_KEY}:${user.id}`;
+  const accountingMigrationNeeded = Boolean(row?.payload) && (Number(row.payload.accountingVersion) || 1) < 2;
   if (row?.payload) {
     data = normalizeData(row.payload);
     try { localStorage.setItem(accountKey, JSON.stringify(data)); }
@@ -2608,6 +2809,9 @@ async function loadAccountData(user) {
       console.warn("Local cache could not be updated:", cacheError);
     }
   }
+
+  if (accountingMigrationNeeded) saveData();
+  else setCloudSyncState("saved");
 
   applyCustomCategoryNames();
   updateCategoryOptions();
@@ -2673,6 +2877,10 @@ async function resetAccountData() {
   message.textContent = "Resetting account data…";
   message.classList.remove("error");
   try {
+    if ($("#resetBackupFirst")?.checked) {
+      message.textContent = "Downloading your backup before the reset…";
+      await createBackup();
+    }
     await remoteSaveQueue;
     const emptyData = createEmptyData();
     const { error } = await supabaseClient
@@ -2727,6 +2935,10 @@ async function handleAuthSession(session) {
 
   supabaseUser = user;
   $("#accountEmail").textContent = user.email || "Signed in to CACHE";
+  if (passwordRecoveryPending) {
+    setAuthenticatedView(false);
+    return;
+  }
   setAuthMessage("Loading your inventory…");
   setAuthenticatedView(false);
   if (loadedUserId === user.id) {
@@ -2750,6 +2962,39 @@ async function handleAuthSession(session) {
     console.error("Could not load account data:", error);
     setAuthMessage("Could not load your cloud data. Check the database setup and try again.", true);
   }
+}
+
+async function sendPasswordReset() {
+  const email = $("#authEmail").value.trim();
+  if (!email) return setAuthMessage("Enter your account email first, then choose Forgot password.", true);
+  setAuthMessage("Sending password reset email…");
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) return setAuthMessage(error.message, true);
+  setAuthMessage("If an account uses that email, a password reset link is on its way. Check spam too.");
+}
+
+async function finishPasswordRecovery(event) {
+  event.preventDefault();
+  const password = $("#recoveryPassword").value;
+  const message = $("#recoveryMessage");
+  if (password.length < 8) {
+    message.textContent = "Use at least 8 characters.";
+    message.classList.add("error");
+    return;
+  }
+  const { error } = await supabaseClient.auth.updateUser({ password });
+  if (error) {
+    message.textContent = error.message;
+    message.classList.add("error");
+    return;
+  }
+  passwordRecoveryPending = false;
+  $("#passwordRecoveryForm").classList.add("hidden");
+  $("#authForm").classList.remove("hidden");
+  $("#recoveryPassword").value = "";
+  await handleAuthSession((await supabaseClient.auth.getSession()).data.session);
 }
 
 async function signIn(event) {
@@ -2776,6 +3021,8 @@ async function signUp() {
 
 $("#authForm").addEventListener("submit", signIn);
 $("#signUpButton").addEventListener("click", signUp);
+$("#passwordResetButton").addEventListener("click", sendPasswordReset);
+$("#passwordRecoveryForm").addEventListener("submit", finishPasswordRecovery);
 async function signOut() {
   const { error } = await supabaseClient.auth.signOut();
   if (error) setAuthMessage(error.message, true);
@@ -2785,8 +3032,36 @@ async function signOut() {
 $("#signOutButton").addEventListener("click", signOut);
 $("#accountSignOutButton").addEventListener("click", signOut);
 $("#resetAccountDataButton").addEventListener("click", resetAccountData);
+$("#cloudSyncStatus").addEventListener("click", retryCloudSync);
+$("#reportDateFrom").addEventListener("change", renderFinancialReports);
+$("#reportDateTo").addEventListener("change", renderFinancialReports);
+$("#reportCategoryFilter").addEventListener("change", renderFinancialReports);
+$("#reportPlatformFilter").addEventListener("change", renderFinancialReports);
 
-supabaseClient.auth.onAuthStateChange((_event, session) => {
+document.addEventListener("input", (event) => {
+  if (event.target.matches("#saleReinvestmentPercent")) {
+    const form = $("#saleForm");
+    if (form) form.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  if (event.target.matches("#pendingReinvestmentPercent")) {
+    const sale = data.sales.find((entry) => entry.id === event.target.dataset.pendingSaleSplit);
+    const item = sale && data.items.find((entry) => entry.id === sale.itemId);
+    const percent = Math.max(0, Math.min(100, Number(event.target.value) || 0));
+    $("#pendingReinvestmentLabel").textContent = percent + "% reinvestment · " + (100 - percent) + "% personal";
+    if (sale && item && !item.purchaseCostUnknown) {
+      const allocation = saleCostBreakdown({ ...sale, reinvestmentPercent: percent }, item);
+      $("#pendingAllocationPreview").textContent = "Reinvestment first: " + money(allocation.reinvestmentFirst) + " costs; then " + money(allocation.reinvestmentAdded - allocation.reinvestmentFirst) + " of profit. Personal share: " + money(allocation.personalAdded) + ".";
+    }
+  }
+});
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY") {
+    passwordRecoveryPending = true;
+    $("#authForm").classList.add("hidden");
+    $("#passwordRecoveryForm").classList.remove("hidden");
+    $("#recoveryMessage").textContent = "Choose a new password to finish recovering your account.";
+  }
   window.setTimeout(() => handleAuthSession(session), 0);
 });
 

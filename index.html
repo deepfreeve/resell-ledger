@@ -23,7 +23,16 @@
       <button class="primary-button" id="signInButton" type="submit">Sign in</button>
       <button class="secondary-button" id="signUpButton" type="button">Create account</button>
     </div>
+    <button class="text-button" id="passwordResetButton" type="button">Forgot password?</button>
     <p class="form-message" id="authMessage" role="status" aria-live="polite"></p>
+  </form>
+  <form class="auth-card hidden" id="passwordRecoveryForm">
+    <p class="eyebrow">ACCOUNT RECOVERY</p>
+    <h1>Choose a new password</h1>
+    <label for="recoveryPassword">New password</label>
+    <input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" required>
+    <button class="primary-button full-button" type="submit">Save new password</button>
+    <p class="form-message" id="recoveryMessage" role="status" aria-live="polite"></p>
   </form>
 </section>
 
@@ -116,6 +125,7 @@
 
       <div class="topbar-right">
 
+        <button class="sync-status" id="cloudSyncStatus" type="button" data-state="saved" aria-label="Cloud sync status">Synced</button>
         <button class="secondary-button mobile-account-link" type="button" data-page="account">Account</button>
         <button class="secondary-button account-button" id="signOutButton" type="button">Sign out</button>
 
@@ -241,7 +251,7 @@
             </div>
 
             <h2 id="capitalValue">$0.00</h2>
-            <p>Total purchase cost of all recorded inventory</p>
+            <p>Known bought costs only; estimates are excluded</p>
           </article>
 
           <article class="stat-card financial-card">
@@ -395,10 +405,18 @@
               <input id="restoreFile" type="file" accept="application/json,.json" hidden>
             </div>
           </div>
-          <p class="field-hint">Monthly revenue, costs, net proceeds, and realized profit. Imported sales with unknown purchase cost are excluded from profit until you add the cost.</p>
+          <div class="report-filters" aria-label="Sales report filters">
+            <label>From <input id="reportDateFrom" type="date"></label>
+            <label>To <input id="reportDateTo" type="date"></label>
+            <label>Category <select id="reportCategoryFilter"><option value="all">All categories</option></select></label>
+            <label>Platform <select id="reportPlatformFilter"><option value="all">All platforms</option><option value="ebay">eBay</option><option value="other">Other</option></select></label>
+          </div>
+          <p class="field-hint">Revenue, fees, shipping, and net profit after inventory cost. Imported sales with unknown purchase cost are excluded from profit until you add the cost.</p>
           <div class="report-table-wrap" id="monthlyReport"></div>
           <h4 class="report-subheading">Profit by category</h4>
           <div class="report-table-wrap" id="categoryProfitReport"></div>
+          <h4 class="report-subheading">Net profit by platform</h4>
+          <div class="report-table-wrap" id="platformProfitReport"></div>
           <p class="form-message" id="backupMessage" role="status" aria-live="polite"></p>
         </section>
 
@@ -433,6 +451,7 @@
             </div>
           </div>
           <p class="field-hint">Permanently clear this account's inventory, sales, custom categories, balances, and stored item photos. Your CACHE sign-in will remain active.</p>
+          <label class="reset-backup-option"><input id="resetBackupFirst" type="checkbox" checked> Download a backup before resetting</label>
           <button class="danger-button" id="resetAccountDataButton" type="button">Reset my account data</button>
           <p class="form-message" id="accountResetMessage" role="status" aria-live="polite"></p>
         </section>
@@ -444,11 +463,15 @@
               <h3>Import eBay sales CSV</h3>
             </div>
           </div>
-          <p class="field-hint">Choose an eBay orders/sales CSV or Listings Sales report and review rows before importing. Enter a bought cost for each sale and use its slider to choose what percent of positive profit goes to reinvestment; the remainder goes to personal funds. Leave cost blank if you do not know it yet. We match by SKU or item title, skip duplicates, and ignore buyer details. Listings Sales reports only give a date range, so their sales are dated to the report end date; use an order-level export for exact sale dates.</p>
+          <p class="field-hint">Choose an eBay orders/sales CSV or Listings Sales report and review rows before importing. Enter the bought cost and choose what percent of profit is reinvested. Sale costs (purchase cost, eBay fees, shipping, and other costs) are returned to reinvestment first; only profit left after all costs is split. Leave cost blank if unknown. We match by SKU or title, skip duplicates, and ignore buyer details. Listings Sales reports only give a date range, so those sales use the report end date.</p>
           <div class="form-group">
             <label for="ebayCsvFile">eBay CSV file</label>
             <input id="ebayCsvFile" type="file" accept=".csv,text/csv">
           </div>
+          <label class="field ebay-estimate-control" for="ebayEstimatePercent">Estimate bought cost as a percentage of sale price: <span id="ebayEstimateLabel">50%</span>
+            <input id="ebayEstimatePercent" type="range" min="0" max="100" step="1" value="50">
+            <small>Estimated costs are marked clearly and can be edited after import.</small>
+          </label>
           <div id="ebayImportSummary" class="form-message" role="status" aria-live="polite"></div>
           <div id="ebayPreview" class="report-table-wrap"></div>
           <div class="detail-actions">
@@ -609,8 +632,8 @@
             </div>
 
             <div class="form-group">
-              <label for="purchaseDate">Purchase date *</label>
-              <input id="purchaseDate" name="purchaseDate" type="date" required>
+              <label for="purchaseDate">Purchase date (optional)</label>
+              <input id="purchaseDate" name="purchaseDate" type="date">
             </div>
 
           </div>
@@ -632,6 +655,10 @@
             <label for="itemCameraPhoto" class="photo-camera-label">Take a photo</label>
             <input id="itemCameraPhoto" name="itemCameraPhoto" type="file" accept="image/*" capture="environment">
             <p class="field-hint">Search opens image results in a new browser tab. Download the image you want, then choose it above. You can also browse your device or use the camera. Images up to 12 MB are resized and compressed.</p>
+          </div>
+          <div class="photo-preview-wrap" id="itemPhotoPreviewWrap" hidden>
+            <img id="itemPhotoPreview" alt="Selected item photo preview">
+            <p class="form-message" id="itemPhotoPreviewMessage" role="status"></p>
           </div>
 
           <p id="formMessage" class="form-message" role="status"></p>

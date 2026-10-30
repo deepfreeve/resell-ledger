@@ -1,33 +1,29 @@
 # CACHE backlog
 
-## Next up
+## Remaining setup and product work
 
-- [ ] Confirm the latest Cloudflare Pages deployment succeeds and opens correctly.
-- [ ] Run a browser smoke test for sign-in, adding/editing items, photo upload, sale entry, eBay CSV import, backup restore, and account reset. Use a test account for destructive flows.
-- [ ] Add a “Download backup first” option to the account reset confirmation.
-- [ ] Expand eBay CSV handling for additional report formats, refunds, and partial refunds; document how each amount affects revenue and fees.
-- [ ] Add a custom domain in Cloudflare Pages and update Supabase Auth redirect URLs after choosing the domain.
-- [ ] Add barcode/SKU scanning for faster item lookup and entry on phones.
+- [ ] Review and approve the current changes before publishing; then confirm the Cloudflare Pages build and live site.
+- [ ] Choose a custom domain and add it to Cloudflare Pages and Supabase Auth's allowed redirect URLs.
+- [ ] Add CSV coverage for more eBay report variants, including refunds and partial refunds, once sample files are available.
+- [ ] Build an optional eBay connection and reviewed batch publishing flow. Requires an eBay Developer keyset, OAuth redirect configuration, seller authorization, and policy/location setup. Never put the eBay client secret in browser code.
+- [ ] Build AI batch listing drafts after choosing an AI provider, adding a server-side API secret, and reviewing per-listing operating costs. Keep drafts private and unpublished until explicit user approval.
+- [ ] Add barcode/SKU scanning for phone-based inventory entry.
 
-## Pro feature candidates
+## Pro feature ideas to validate
 
-Prioritize paid features that save time, improve pricing decisions, or support a growing resale business. Keep sign-in, privacy, data access, and basic backup/export available to every account.
-
-- [ ] **AI listing assistant:** Turn item details and photos into marketplace-ready titles, descriptions, and keywords; let users choose tone and platform.
-- [ ] **Pricing research:** Show sold-price comparisons, recent price ranges, and suggested listing prices from an approved marketplace data source.
-- [ ] **Cross-listing workspace:** Prepare listings for multiple marketplaces, track where each item is listed, and warn about stale or duplicate listings.
-- [ ] **Marketplace sync:** Connect supported marketplace accounts to import sales and update listing status when an item sells.
-- [ ] **Batch operations:** Edit prices and categories in bulk, duplicate batches, and create printable SKU/barcode labels.
-- [ ] **Photo studio:** Batch crop and resize photos, remove backgrounds, and produce consistent listing images.
-- [ ] **Advanced analytics:** Break down margins by platform, product, category, and time; add inventory aging, sell-through, and return-on-investment views.
-- [ ] **Tax-ready reports:** Organize sales, fees, shipping, and cost records into exportable summaries, with clear review notes and no tax-filing claims.
-- [ ] **Team accounts:** Share inventory with staff or business partners using roles, activity history, and change tracking.
-- [ ] **Automation and alerts:** Flag slow-moving items, unusually low margins, missing purchase costs, and payouts that appear overdue.
-- [ ] **Higher-volume tools:** Support larger inventories, more photo storage, and longer report history with transparent plan limits.
+- [ ] AI batch listing creation and reusable listing templates.
+- [ ] Pricing research using a permitted marketplace data source.
+- [ ] Cross-listing workspace and marketplace status sync.
+- [ ] Batch price/category edits, duplicate batches, and printable SKU labels.
+- [ ] Photo batch editing, background cleanup, and consistent listing images.
+- [ ] Inventory aging, sell-through, ROI, and richer platform/category reports.
+- [ ] Tax-preparation exports with clear review notes and no tax-filing claims.
+- [ ] Team seats, activity history, automation, and alerts.
+- [ ] Higher usage allowances for inventory, photo storage, and AI listing credits.
 
 ## Pro plan foundations
 
-- [ ] Pick a billing provider and decide how subscription status will be stored and checked securely.
-- [ ] Add a server-side endpoint for billing webhooks and entitlement checks; do not trust a browser-only Pro flag.
-- [ ] Define Free and Pro limits before building gated features, and provide a grace period for billing interruptions.
-- [ ] Keep user data, account deletion, and at least one complete data export available without a paid subscription.
+- [ ] Compare billing providers and decide how subscription status is validated securely.
+- [ ] Add server-side billing webhooks and entitlement checks; never trust a browser-only Pro flag.
+- [ ] Define free and Pro limits, interruption grace periods, and upgrade messaging before gating features.
+- [ ] Keep sign-in, privacy, data access, account deletion, and complete export available to every account.
