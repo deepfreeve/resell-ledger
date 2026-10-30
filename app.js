@@ -333,7 +333,7 @@ function updateDashboard() {
   );
 
   const inventoryValue = unsoldItems.reduce(
-    (total, item) => total + Number(item.purchaseCost || 0),
+    (total, item) => total + Number(item.listedPrice || 0),
     0
   );
 
@@ -599,6 +599,7 @@ function renderCategoryBreakdown() {
     }
   ).join("");
 }
+
 /* =========================================
    RECENT ACTIVITY
 ========================================= */
@@ -787,10 +788,10 @@ function itemRow(item) {
       <div class="item-price">
 
         <strong>
-          ${money(sale ? netProceeds(sale) : item.purchaseCost)}
+          ${money(sale ? netProceeds(sale) : (item.listedPrice || 0))}
         </strong>
 
-        <span>${sale ? "Net proceeds" : "Purchase cost"}</span>
+        <span>${sale ? "Net proceeds" : "Listed price"}</span>
 
         <button class="text-button" type="button"
           data-open-item="${escapeHtml(item.id)}">
@@ -1045,12 +1046,15 @@ async function saveItemForm(event) {
   message.classList.remove("error");
 
   const name = $("#itemName").value.trim();
+  const listedPrice = Number($("#listedPrice").value);
   const purchaseCost = Number($("#purchaseCost").value);
   const purchaseDate = $("#purchaseDate").value;
-     if (!name || !purchaseDate ||
+
+  if (!name || !purchaseDate ||
+      !Number.isFinite(listedPrice) || listedPrice < 0 ||
       !Number.isFinite(purchaseCost) || purchaseCost < 0) {
     message.textContent =
-      "Enter a name, valid purchase cost, and date.";
+      "Enter a name, valid listed price, purchase cost, and date.";
 
     message.classList.add("error");
     return;
@@ -1079,6 +1083,7 @@ async function saveItemForm(event) {
       id: existing ? existing.id : makeId(),
       name,
       productCategory: category,
+      listedPrice: Math.round(listedPrice * 100) / 100,
       purchaseCost: Math.round(purchaseCost * 100) / 100,
       purchaseDate,
       itemCondition: $("#itemCondition").value,
@@ -1162,6 +1167,7 @@ function startEditingItem(itemId) {
   setCardFieldsVisibility(item.itemCondition);
 
   $("#itemName").value = item.name;
+  $("#listedPrice").value = item.listedPrice ?? "";
   $("#purchaseCost").value = item.purchaseCost;
   $("#purchaseDate").value = item.purchaseDate;
 
@@ -1215,6 +1221,7 @@ function openItemDetails(itemId) {
 
   let html = '<div class="detail-grid">';
 
+  html += detailBox("Listed price", money(item.listedPrice || 0));
   html += detailBox("Purchase cost", money(item.purchaseCost));
   html += detailBox("Purchase date", formatDate(item.purchaseDate));
   html += detailBox("Category", categoryName(item));
@@ -1433,6 +1440,7 @@ function showSaleForm(itemId) {
     saveSale(event, itemId);
   });
 }
+
 function saveSale(event, itemId) {
   event.preventDefault();
 
