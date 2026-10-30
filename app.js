@@ -1,5 +1,9 @@
 "use strict";
 
+/* =========================================
+   RESELLLEDGER — APPLICATION
+========================================= */
+
 const STORAGE_KEY = "resellledger_data_v1";
 
 const CATEGORY_NAMES = {
@@ -13,6 +17,17 @@ const CATEGORY_NAMES = {
   other: "Other"
 };
 
+const CATEGORY_COLORS = [
+  "#efff00",
+  "#a6adad",
+  "#737b82",
+  "#454b50",
+  "#c9ced1",
+  "#39d98a",
+  "#e4b94b",
+  "#a98bff"
+];
+
 const STANDARD_CONDITIONS = [
   "Not specified", "New", "Like new", "Excellent",
   "Good", "Fair", "Poor", "Damaged"
@@ -25,18 +40,29 @@ const POKEMON_CONDITIONS = [
 
 const $ = (selector) => document.querySelector(selector);
 
+let salesChart = null;
+
+/* =========================================
+   DATA STORAGE
+========================================= */
+
 function createEmptyData() {
   return {
     items: [],
     sales: [],
     customCategories: [],
-    funds: { capital: 0, reinvestment: 0, personal: 0 }
+    funds: {
+      capital: 0,
+      reinvestment: 0,
+      personal: 0
+    }
   };
 }
 
 function loadData() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
+
     if (!stored) return createEmptyData();
 
     const saved = JSON.parse(stored);
@@ -60,13 +86,13 @@ function loadData() {
 
 let data = loadData();
 
-applyCustomCategoryNames();
-
 function applyCustomCategoryNames() {
   data.customCategories.forEach((category) => {
     CATEGORY_NAMES[category.id] = category.name;
   });
 }
+
+applyCustomCategoryNames();
 
 function saveData() {
   try {
@@ -78,6 +104,10 @@ function saveData() {
     return false;
   }
 }
+
+/* =========================================
+   UTILITIES
+========================================= */
 
 function makeId() {
   return window.crypto?.randomUUID?.() ||
@@ -160,7 +190,9 @@ function lifetimeProfit() {
     .reduce((total, sale) => total + saleProfit(sale), 0);
 }
 
-/* CATEGORIES */
+/* =========================================
+   CATEGORIES
+========================================= */
 
 function updateCategoryOptions() {
   const productSelect = $("#productCategory");
@@ -283,15 +315,393 @@ function setGradingFieldsVisibility() {
       : "none";
 }
 
-/* DASHBOARD */
+/* =========================================
+   DASHBOARD STATISTICS
+========================================= */
 
 function updateDashboard() {
+  const unsoldItems = data.items.filter(
+    (item) => !getSaleForItem(item.id)
+  );
+
+  const soldItems = data.sales.filter(
+    (sale) => sale.status === "paid"
+  );
+
+  const pendingSales = data.sales.filter(
+    (sale) => sale.status === "pending"
+  );
+
+  const inventoryValue = unsoldItems.reduce(
+    (total, item) => total + Number(item.purchaseCost || 0),
+    0
+  );
+
+  const salesRevenue = data.sales.reduce(
+    (total, sale) => total + Number(sale.salePrice || 0),
+    0
+  );
+
   $("#capitalValue").textContent = money(data.funds.capital);
   $("#reinvestmentValue").textContent = money(data.funds.reinvestment);
   $("#personalValue").textContent = money(data.funds.personal);
   $("#pendingValue").textContent = money(pendingTotal());
   $("#lifetimeProfitValue").textContent = money(lifetimeProfit());
+
+  $("#sidebarProfit").textContent = money(lifetimeProfit());
+
+  $("#inStockCount").textContent = unsoldItems.length;
+  $("#soldCount").textContent = soldItems.length;
+  $("#pendingCount").textContent = pendingSales.length;
+
+  $("#inventoryStatusTotal").textContent =
+    `${data.items.length} total items`;
+
+  $("#totalInventoryValue").textContent = unsoldItems.length;
+  $("#inventoryValue").textContent = money(inventoryValue);
+
+  $("#salesOverviewTotal").textContent = money(salesRevenue);
+
+  renderSalesChart();
+  renderCategoryBreakdown();
+  renderRecentActivity();
 }
+
+/* =========================================
+   SALES CHART
+========================================= */
+
+function renderSalesChart() {
+  const canvas = $("#salesChart");
+
+  if (!canvas || typeof Chart === "undefined") return;
+
+  const monthlySales = {};
+
+  data.sales.forEach((sale) => {
+    const dateValue = sale.saleDate || sale.createdAt;
+
+    if (!dateValue) return;
+
+    const date = new Date(dateValue + (dateValue.length === 10 ? "T00:00:00" : ""));
+
+    if (Number.isNaN(date.getTime())) return;
+
+    const key =
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+    monthlySales[key] =
+      (monthlySales[key] || 0) + Number(sale.salePrice || 0);
+  });
+
+  const labels = [];
+  const values = [];
+
+  const now = new Date();
+
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+
+    const key =
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+    labels.push(date.toLocaleDateString("en-US", { month: "short" }));
+    values.push(monthlySales[key] || 0);
+  }
+
+  if (salesChart) {
+    salesChart.destroy();
+  }
+
+  const context = canvas.getContext("2d");
+
+  const gradient = context.createLinearGradient(0, 0, 0, 240);
+
+  gradient.addColorStop(0, "rgba(239,255,0,0.28)");
+  gradient.addColorStop(1, "rgba(239,255,0,0.00)");
+
+  salesChart = new Chart(context, {
+    type: "line",
+
+    data: {
+      labels,
+
+      datasets: [{
+        label: "Sales revenue",
+        data: values,
+
+        borderColor: "#efff00",
+        backgroundColor: gradient,
+
+        borderWidth: 2.5,
+        fill: true,
+
+        tension: 0.4,
+
+        pointRadius: 3,
+        pointHoverRadius: 6,
+
+        pointBackgroundColor: "#efff00",
+        pointBorderColor: "#101010",
+        pointBorderWidth: 2
+      }]
+    },
+
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      plugins: {
+        legend: {
+          display: false
+        },
+
+        tooltip: {
+          backgroundColor: "#242729",
+          titleColor: "#ffffff",
+          bodyColor: "#efff00",
+          borderColor: "#414447",
+          borderWidth: 1,
+
+          callbacks: {
+            label: (context) => money(context.raw)
+          }
+        }
+      },
+
+      scales: {
+        x: {
+          grid: {
+            color: "rgba(255,255,255,0.05)",
+            drawBorder: false
+          },
+
+          ticks: {
+            color: "#92969b",
+            font: {
+              size: 10
+            }
+          }
+        },
+
+        y: {
+          beginAtZero: true,
+
+          grid: {
+            color: "rgba(255,255,255,0.07)",
+            drawBorder: false
+          },
+
+          ticks: {
+            color: "#92969b",
+            font: {
+              size: 10
+            },
+
+            callback: (value) => {
+              if (value >= 1000) {
+                return "$" + (value / 1000).toFixed(1) + "k";
+              }
+
+              return "$" + value;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* =========================================
+   CATEGORY BREAKDOWN
+========================================= */
+
+function renderCategoryBreakdown() {
+  const donut = $("#categoryDonut");
+  const legend = $("#categoryLegend");
+
+  if (!donut || !legend) return;
+
+  const counts = {};
+
+  data.items
+    .filter((item) => !getSaleForItem(item.id))
+    .forEach((item) => {
+      const category = item.productCategory || "other";
+
+      counts[category] = (counts[category] || 0) + 1;
+    });
+
+  const entries = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1]);
+
+  const total = entries.reduce(
+    (sum, entry) => sum + entry[1],
+    0
+  );
+
+  $("#categoryTotal").textContent = total;
+
+  if (!total) {
+    donut.style.background =
+      "conic-gradient(#303438 0deg 360deg)";
+
+    legend.innerHTML = `
+      <p class="muted-text">
+        Add inventory to see your category breakdown.
+      </p>`;
+
+    return;
+  }
+
+  let currentAngle = 0;
+  const segments = [];
+
+  entries.forEach(([category, count], index) => {
+    const angle = (count / total) * 360;
+    const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+
+    segments.push(
+      `${color} ${currentAngle}deg ${currentAngle + angle}deg`
+    );
+
+    currentAngle += angle;
+  });
+
+  donut.style.background =
+    `conic-gradient(${segments.join(", ")})`;
+
+  legend.innerHTML = entries.slice(0, 6).map(
+    ([category, count], index) => {
+      const percentage = Math.round((count / total) * 100);
+      const color = CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+
+      return `
+        <div class="category-legend-row">
+
+          <span class="category-color"
+            style="background:${color}"></span>
+
+          <span class="category-name">
+            ${escapeHtml(CATEGORY_NAMES[category] || "Other")}
+          </span>
+
+          <span class="category-count">${count}</span>
+
+          <span class="category-percent">${percentage}%</span>
+
+        </div>`;
+    }
+  ).join("");
+}
+
+/* =========================================
+   RECENT ACTIVITY
+========================================= */
+
+function relativeTime(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const difference = Math.max(0, Date.now() - date.getTime());
+
+  const minutes = Math.floor(difference / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (hours < 24) return `${hours} hours ago`;
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+
+  return formatDate(value.slice(0, 10));
+}
+
+function renderRecentActivity() {
+  const container = $("#recentActivity");
+
+  if (!container) return;
+
+  const activities = [];
+
+  data.items.forEach((item) => {
+    activities.push({
+      title: "Item added",
+      description: item.name,
+      date: item.createdAt || item.purchaseDate,
+      type: "added",
+      icon: "+"
+    });
+  });
+
+  data.sales.forEach((sale) => {
+    const item = data.items.find(
+      (entry) => entry.id === sale.itemId
+    );
+
+    const name = item ? item.name : "Inventory item";
+
+    activities.push({
+      title: sale.status === "paid"
+        ? "Sale marked as paid"
+        : "Sale recorded",
+
+      description: name,
+
+      date: sale.paidAt || sale.createdAt || sale.saleDate,
+
+      type: sale.status === "paid" ? "paid" : "sale",
+
+      icon: sale.status === "paid" ? "✓" : "$"
+    });
+  });
+
+  activities.sort((a, b) =>
+    new Date(b.date || 0) - new Date(a.date || 0)
+  );
+
+  const recent = activities.slice(0, 5);
+
+  if (!recent.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>No activity yet</h3>
+        <p>Your inventory and sales activity will appear here.</p>
+      </div>`;
+
+    return;
+  }
+
+  container.innerHTML = recent.map((activity) => `
+    <div class="activity-item">
+
+      <div class="activity-icon ${
+        activity.type === "paid" ? "paid" :
+        activity.type === "added" ? "" : "updated"
+      }">
+        ${activity.icon}
+      </div>
+
+      <div class="activity-main">
+        <strong>${escapeHtml(activity.title)}</strong>
+        <span>${escapeHtml(activity.description)}</span>
+      </div>
+
+      <span class="activity-time">
+        ${escapeHtml(relativeTime(activity.date))}
+      </span>
+
+    </div>
+  `).join("");
+}
+
+/* =========================================
+   EMPTY STATES AND INVENTORY DISPLAY
+========================================= */
 
 function emptyState(title, description, buttonText, page) {
   return `
@@ -371,6 +781,7 @@ function itemRow(item) {
       </div>
 
       <div class="item-price">
+
         <strong>
           ${money(sale ? netProceeds(sale) : item.purchaseCost)}
         </strong>
@@ -381,6 +792,7 @@ function itemRow(item) {
           data-open-item="${escapeHtml(item.id)}">
           Details
         </button>
+
       </div>
 
     </article>`;
@@ -392,7 +804,7 @@ function renderRecentInventory() {
     .sort((a, b) =>
       (b.createdAt || "").localeCompare(a.createdAt || "")
     )
-    .slice(0, 5);
+    .slice(0, 4);
 
   $("#recentInventory").innerHTML = items.length
     ? items.map(itemRow).join("")
@@ -545,7 +957,9 @@ function renderAll() {
   renderSold();
 }
 
-/* NAVIGATION */
+/* =========================================
+   NAVIGATION
+========================================= */
 
 function showPage(pageName) {
   if (!["home", "inventory", "add", "pending", "sold"].includes(pageName)) {
@@ -576,15 +990,15 @@ function showPage(pageName) {
 
   const title = $("#currentPageTitle");
 
-  if (title) {
-    title.textContent = titles[pageName];
-  }
+  if (title) title.textContent = titles[pageName];
 
   $("#formMessage").textContent = "";
   $("#formMessage").classList.remove("error");
 }
 
-/* ITEM PHOTOS */
+/* =========================================
+   PHOTOS
+========================================= */
 
 function readPhoto(file) {
   return new Promise((resolve, reject) => {
@@ -607,7 +1021,9 @@ function readPhoto(file) {
   });
 }
 
-/* ADD AND EDIT INVENTORY */
+/* =========================================
+   ADD AND EDIT ITEMS
+========================================= */
 
 async function saveItemForm(event) {
   event.preventDefault();
@@ -642,6 +1058,7 @@ async function saveItemForm(event) {
 
   try {
     const selectedFile = $("#itemPhoto").files[0];
+
     const newPhoto = selectedFile
       ? await readPhoto(selectedFile)
       : null;
@@ -662,14 +1079,17 @@ async function saveItemForm(event) {
       purchaseCost: Math.round(purchaseCost * 100) / 100,
       purchaseDate,
       itemCondition: $("#itemCondition").value,
+
       photo: newPhoto !== null
         ? newPhoto
         : (existing?.photo || ""),
+
       notes: $("#itemNotes").value.trim(),
       cardType: isCard ? $("#cardType").value : "",
       gradingCompany: graded ? $("#gradingCompany").value : "",
       cardGrade: graded ? $("#cardGrade").value.trim() : "",
       certNumber: graded ? $("#certNumber").value.trim() : "",
+
       createdAt: existing?.createdAt || new Date().toISOString()
     };
 
@@ -704,8 +1124,8 @@ async function saveItemForm(event) {
 
     updateCategoryOptions();
     setCardFieldsVisibility();
-    renderAll();
 
+    renderAll();
     showPage("inventory");
     openItemDetails(item.id);
 
@@ -741,6 +1161,7 @@ function startEditingItem(itemId) {
   $("#itemName").value = item.name;
   $("#purchaseCost").value = item.purchaseCost;
   $("#purchaseDate").value = item.purchaseDate;
+
   $("#itemCondition").value =
     item.itemCondition || "Not specified";
 
@@ -763,7 +1184,9 @@ function startEditingItem(itemId) {
   closeDetails();
 }
 
-/* ITEM DETAILS */
+/* =========================================
+   ITEM DETAILS
+========================================= */
 
 function detailBox(label, value) {
   return `
@@ -792,6 +1215,7 @@ function openItemDetails(itemId) {
   html += detailBox("Purchase cost", money(item.purchaseCost));
   html += detailBox("Purchase date", formatDate(item.purchaseDate));
   html += detailBox("Category", categoryName(item));
+
   html += detailBox(
     "Condition",
     item.itemCondition || "Not specified"
@@ -849,6 +1273,7 @@ function openItemDetails(itemId) {
     html += detailBox("Net proceeds", money(netProceeds(sale)));
     html += detailBox("Profit / loss", money(saleProfit(sale)));
     html += detailBox("Sale date", formatDate(sale.saleDate));
+
     html += detailBox(
       "Payout",
       sale.status === "paid" ? "Paid" : "Pending"
@@ -908,7 +1333,9 @@ function closeDetails() {
   $("#itemDetails").classList.add("hidden");
 }
 
-/* SALES */
+/* =========================================
+   SALES
+========================================= */
 
 function showSaleForm(itemId) {
   const item = data.items.find(
@@ -1091,6 +1518,7 @@ function markSalePaid(saleId) {
   sale.status = "paid";
   sale.paidDate = todayString();
   sale.paidAt = new Date().toISOString();
+
   sale.capitalRecovered = recovered;
   sale.reinvestmentAdded = reinvestment;
   sale.personalAdded = personal;
@@ -1187,52 +1615,63 @@ function deleteItem(itemId) {
   renderAll();
 }
 
-/* EVENT HANDLERS */
+/* =========================================
+   EVENT HANDLERS
+========================================= */
 
 document.addEventListener("click", (event) => {
   const target = event.target;
 
   const pageButton = target.closest("[data-page]");
+
   if (pageButton) {
     return showPage(pageButton.dataset.page);
   }
 
   const goButton = target.closest("[data-go]");
+
   if (goButton) {
     return showPage(goButton.dataset.go);
   }
 
   const openButton = target.closest("[data-open-item]");
+
   if (openButton) {
     return openItemDetails(openButton.dataset.openItem);
   }
 
   const editButton = target.closest("[data-edit-item]");
+
   if (editButton) {
     return startEditingItem(editButton.dataset.editItem);
   }
 
   const saleButton = target.closest("[data-start-sale]");
+
   if (saleButton) {
     return showSaleForm(saleButton.dataset.startSale);
   }
 
   const paidButton = target.closest("[data-mark-paid]");
+
   if (paidButton) {
     return markSalePaid(paidButton.dataset.markPaid);
   }
 
   const cancelButton = target.closest("[data-delete-sale]");
+
   if (cancelButton) {
     return cancelSale(cancelButton.dataset.deleteSale);
   }
 
   const duplicateButton = target.closest("[data-duplicate-item]");
+
   if (duplicateButton) {
     return duplicateItem(duplicateButton.dataset.duplicateItem);
   }
 
   const deleteButton = target.closest("[data-delete-item]");
+
   if (deleteButton) {
     return deleteItem(deleteButton.dataset.deleteItem);
   }
@@ -1242,7 +1681,9 @@ document.addEventListener("click", (event) => {
   }
 });
 
-/* FORM AND SEARCH LISTENERS */
+/* =========================================
+   SEARCH AND FORM LISTENERS
+========================================= */
 
 $("#quickAddButton").addEventListener("click", () => {
   showPage("add");
@@ -1282,7 +1723,9 @@ $("#categoryFilter").addEventListener(
   renderInventory
 );
 
-/* INITIALIZE APP */
+/* =========================================
+   INITIALIZE
+========================================= */
 
 updateCategoryOptions();
 
