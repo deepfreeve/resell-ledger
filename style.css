@@ -1,6 +1,5 @@
 /* =========================================
-   RESELLLEDGER — APPROVED DARK DESIGN
-   Existing HTML and JavaScript compatible
+   RESELLLEDGER — ASYMMETRIC DASHBOARD
 ========================================= */
 
 :root {
@@ -8,14 +7,13 @@
 
   --bg: #0d1012;
   --sidebar: #090c0e;
-  --panel: #111619;
-  --panel-alt: #151a1e;
-  --panel-hover: #1b2226;
-  --border: #263036;
+  --panel: #12181c;
+  --panel-alt: #171e22;
+  --border: #29343b;
 
-  --text: #f2f4f5;
-  --muted: #a0abb3;
-  --subtle: #73808a;
+  --text: #f1f3f4;
+  --muted: #9ba8b0;
+  --subtle: #71808a;
 
   --main-color: #f5ed00;
   --side-color: #090c0e;
@@ -28,9 +26,7 @@
   --sidebar-width: 245px;
 }
 
-/* =========================================
-   RESET
-========================================= */
+/* RESET */
 
 * {
   box-sizing: border-box;
@@ -52,10 +48,7 @@ body {
   line-height: 1.5;
 }
 
-button,
-input,
-select,
-textarea {
+button, input, select, textarea {
   font: inherit;
 }
 
@@ -77,30 +70,24 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* =========================================
-   APP SHELL
-========================================= */
+/* APP SHELL */
 
 .app-shell {
   min-height: 100vh;
 }
 
 /* =========================================
-   SIDEBAR
-   Existing navigation retained
+   SIDEBAR — PRESERVED
 ========================================= */
 
 .sidebar {
   position: fixed;
   z-index: 100;
   inset: 0 auto 0 0;
-
   display: flex;
   flex-direction: column;
-
   width: var(--sidebar-width);
   padding: 26px 17px 18px;
-
   background: var(--side-color);
   border-right: 1px solid var(--border);
 }
@@ -109,10 +96,8 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 12px;
-
   width: 100%;
   padding: 0 7px 34px;
-
   border: 0;
   background: transparent;
   color: var(--text);
@@ -122,15 +107,12 @@ button:disabled {
 .brand-icon {
   display: grid;
   place-items: center;
-
   flex: 0 0 43px;
   width: 43px;
   height: 43px;
-
   border-radius: 9px;
   background: var(--main-color);
   color: #101010;
-
   font-size: 22px;
   font-weight: 900;
 }
@@ -157,23 +139,18 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 13px;
-
   width: 100%;
   min-height: 46px;
   margin: 4px 0;
   padding: 11px 13px;
-
   border: 0;
   border-radius: 7px;
-
   background: transparent;
   color: #b3bdc4;
-
   font-size: 13px;
   font-weight: 550;
   text-align: left;
-
-  transition: background .15s ease, color .15s ease;
+  transition: background .15s, color .15s;
 }
 
 .sidebar-link .nav-icon {
@@ -200,8 +177,6 @@ button:disabled {
   color: var(--main-color);
 }
 
-/* SIDEBAR BOTTOM */
-
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 18px;
@@ -212,12 +187,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 5px;
-
   margin-bottom: 20px;
   padding: 13px 8px;
-
-  border: 0;
-  border-radius: 0;
   background: transparent;
 }
 
@@ -229,7 +200,6 @@ button:disabled {
 .sidebar-profit strong {
   font-size: 25px;
   font-weight: 750;
-  letter-spacing: -.7px;
 }
 
 .sidebar-profit small {
@@ -274,7 +244,7 @@ button:disabled {
   width: 100%;
   max-width: 1650px;
   margin: 0 auto;
-  padding: 27px 29px 45px;
+  padding: 29px 32px 50px;
 }
 
 .page {
@@ -297,23 +267,18 @@ button:disabled {
   }
 }
 
-/* =========================================
-   TOPBAR
-========================================= */
+/* TOPBAR */
 
 .topbar {
   position: sticky;
   z-index: 50;
   top: 0;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-
   min-height: 73px;
-  padding: 0 29px;
-
+  padding: 0 32px;
   border-bottom: 1px solid var(--border);
   background: rgba(13, 16, 18, .97);
 }
@@ -338,11 +303,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-
   width: min(440px, 38vw);
   padding: 0 13px;
-
-  border: 1px solid #303b42;
+  border: 1px solid #303c43;
   border-radius: 7px;
   background: #171e22;
 }
@@ -356,7 +319,6 @@ button:disabled {
   width: 100%;
   min-height: 41px;
   padding: 8px 0;
-
   border: 0;
   outline: 0;
   background: transparent;
@@ -380,14 +342,11 @@ button:disabled {
 .profile-avatar {
   display: grid;
   place-items: center;
-
   width: 37px;
   height: 37px;
-
   border-radius: 50%;
   background: var(--main-color);
   color: #101010;
-
   font-size: 14px;
   font-weight: 850;
 }
@@ -396,9 +355,7 @@ button:disabled {
   display: none;
 }
 
-/* =========================================
-   HEADINGS
-========================================= */
+/* HEADINGS */
 
 .page-heading,
 .dashboard-heading {
@@ -438,12 +395,12 @@ button:disabled {
 }
 
 /* =========================================
-   STAT CARDS
+   DASHBOARD STATISTICS
 ========================================= */
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.25fr .9fr 1fr .9fr;
   gap: 12px;
   margin-bottom: 13px;
 }
@@ -452,14 +409,13 @@ button:disabled {
   min-width: 0;
   padding: 17px 18px;
   overflow: hidden;
-
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
 }
 
 .stat-card:hover {
-  border-color: #3a464d;
+  border-color: #40505a;
 }
 
 .stat-top {
@@ -467,7 +423,6 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 9px;
-
   color: #c4cdd2;
   font-size: 12px;
   font-weight: 550;
@@ -476,15 +431,12 @@ button:disabled {
 .stat-icon {
   display: grid;
   place-items: center;
-
   flex: 0 0 29px;
   width: 29px;
   height: 29px;
-
   border-radius: 6px;
   background: #202a2f;
   color: var(--main-color);
-
   font-size: 15px;
   font-weight: 750;
 }
@@ -492,7 +444,6 @@ button:disabled {
 .stat-card h2 {
   overflow-wrap: anywhere;
   margin: 13px 0 3px;
-
   color: white;
   font-size: clamp(22px, 2vw, 28px);
   font-weight: 750;
@@ -504,8 +455,6 @@ button:disabled {
   color: var(--muted);
   font-size: 11px;
 }
-
-/* INVENTORY STATUS */
 
 .inventory-status-card {
   background: var(--panel);
@@ -542,7 +491,6 @@ button:disabled {
   margin-left: auto;
   color: white;
   font-size: 12px;
-  font-weight: 700;
 }
 
 .inventory-status-line .status-dot {
@@ -562,10 +510,8 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-
   margin-top: 12px;
   padding-top: 10px;
-
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 10px;
@@ -575,21 +521,26 @@ button:disabled {
   color: var(--main-color);
 }
 
-/* FINANCIAL CARDS */
+/* FINANCIAL STATISTICS */
 
 .financial-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr 1fr 1.25fr;
   gap: 12px;
-  margin-bottom: 17px;
+  margin-bottom: 23px;
 }
 
 .financial-card {
-  padding: 15px 17px;
+  padding: 14px 17px;
 }
 
 .financial-card h2 {
-  font-size: 23px;
+  font-size: 22px;
+}
+
+.profit-card {
+  border-color: #3c4630;
+  background: #151b18;
 }
 
 .profit-card h2 {
@@ -597,24 +548,53 @@ button:disabled {
 }
 
 /* =========================================
-   DASHBOARD LAYOUT
+   ASYMMETRIC DASHBOARD PANELS
 ========================================= */
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-bottom: 14px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(270px, .85fr);
+  gap: 15px;
+  margin-bottom: 16px;
+  align-items: stretch;
 }
 
 .lower-dashboard-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(250px, .85fr);
+}
+
+/* Sales gets more space */
+
+.sales-overview-panel {
+  min-height: 390px;
+  padding: 22px 23px;
+}
+
+.sales-overview-panel .chart-container {
+  height: 255px;
+}
+
+/* Recent inventory gets more width */
+
+.recent-items-panel {
+  min-height: 310px;
+}
+
+/* Activity stays narrower and more compact */
+
+.activity-panel {
+  min-height: 275px;
+  padding: 17px;
+}
+
+.categories-panel {
+  min-height: 235px;
+  padding: 17px;
 }
 
 .panel {
   min-width: 0;
-  padding: 18px;
-
+  padding: 19px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
@@ -625,7 +605,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 15px;
 }
 
 .panel-heading h3 {
@@ -633,7 +613,6 @@ button:disabled {
   color: #f0f3f4;
   font-size: 16px;
   font-weight: 680;
-  letter-spacing: -.2px;
 }
 
 .panel-heading .eyebrow {
@@ -649,9 +628,7 @@ button:disabled {
   font-size: 10px;
 }
 
-/* =========================================
-   SALES CHART
-========================================= */
+/* CHART */
 
 .chart-summary {
   display: flex;
@@ -661,7 +638,7 @@ button:disabled {
 }
 
 .chart-summary strong {
-  font-size: 27px;
+  font-size: 29px;
   font-weight: 750;
   letter-spacing: -.7px;
 }
@@ -686,36 +663,30 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-
   margin-top: 10px;
   padding-top: 10px;
-
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 10px;
 }
 
-/* =========================================
-   CATEGORY BREAKDOWN
-========================================= */
+/* CATEGORY BREAKDOWN */
 
 .category-overview {
   display: grid;
-  grid-template-columns: minmax(130px, .85fr) minmax(0, 1.15fr);
+  grid-template-columns: 125px minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  min-height: 180px;
+  gap: 17px;
+  min-height: 170px;
 }
 
 .category-donut {
   position: relative;
   display: grid;
   place-items: center;
-
-  width: min(100%, 180px);
+  width: 125px;
   aspect-ratio: 1;
   border-radius: 50%;
-
   background: conic-gradient(
     var(--main-color) 0deg,
     #8d9ba3 120deg,
@@ -737,7 +708,6 @@ button:disabled {
 .donut-center {
   position: relative;
   z-index: 1;
-
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -762,8 +732,8 @@ button:disabled {
 .category-legend-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 0;
+  gap: 8px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
   font-size: 11px;
 }
@@ -796,9 +766,7 @@ button:disabled {
   text-align: right;
 }
 
-/* =========================================
-   RECENT ACTIVITY
-========================================= */
+/* RECENT ACTIVITY */
 
 .activity-list {
   display: grid;
@@ -808,8 +776,8 @@ button:disabled {
 .activity-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 10px 0;
+  gap: 10px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -820,16 +788,13 @@ button:disabled {
 .activity-icon {
   display: grid;
   place-items: center;
-
-  flex: 0 0 35px;
-  width: 35px;
-  height: 35px;
-
+  flex: 0 0 33px;
+  width: 33px;
+  height: 33px;
   border-radius: 6px;
   background: #202a2f;
   color: var(--main-color);
-
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 750;
 }
 
@@ -871,7 +836,7 @@ button:disabled {
 .activity-time {
   flex-shrink: 0;
   color: var(--green);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 /* =========================================
@@ -885,18 +850,14 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 6px;
-
   min-height: 40px;
   padding: 9px 14px;
-
   border: 1px solid transparent;
   border-radius: 6px;
-
   font-size: 12px;
   font-weight: 650;
   text-align: center;
-
-  transition: background .15s ease, border-color .15s ease;
+  transition: background .15s, border-color .15s;
 }
 
 .primary-button {
@@ -963,14 +924,12 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 13px;
-
   min-width: 0;
   padding: 12px;
-
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--panel);
-  transition: border-color .15s ease;
+  transition: border-color .15s;
 }
 
 .item-row:hover {
@@ -980,12 +939,10 @@ button:disabled {
 .item-thumbnail {
   display: grid;
   place-items: center;
-
   flex: 0 0 55px;
   width: 55px;
   height: 55px;
   overflow: hidden;
-
   border: 1px solid #354149;
   border-radius: 6px;
   background: #202a30;
@@ -1061,8 +1018,6 @@ button:disabled {
   color: var(--green);
 }
 
-/* EMPTY STATE */
-
 .empty-state {
   padding: 32px 18px;
   border: 1px dashed #354149;
@@ -1115,10 +1070,8 @@ select,
 textarea {
   width: 100%;
   min-width: 0;
-
   border: 1px solid #303c43;
   border-radius: 6px;
-
   background: #101619;
   color: var(--text);
   font-size: 13px;
@@ -1163,14 +1116,11 @@ textarea::placeholder {
   position: fixed;
   z-index: 200;
   inset: 0;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   overflow-y: auto;
   padding: 20px;
-
   background: rgba(0, 0, 0, .82);
 }
 
@@ -1183,9 +1133,7 @@ textarea::placeholder {
   max-width: 620px;
   max-height: 90vh;
   overflow-y: auto;
-
   padding: 23px;
-
   border: 1px solid var(--border);
   border-radius: 9px;
   background: #12181c;
@@ -1214,11 +1162,9 @@ textarea::placeholder {
 .icon-button {
   display: grid;
   place-items: center;
-
   flex: 0 0 36px;
   width: 36px;
   height: 36px;
-
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #202a30;
@@ -1325,32 +1271,25 @@ textarea::placeholder {
   line-height: 1.8;
 }
 
-/* =========================================
-   TOAST
-========================================= */
+/* TOAST */
 
 .toast {
   position: fixed;
   z-index: 300;
   right: 18px;
   bottom: 20px;
-
   max-width: 420px;
   padding: 12px 16px;
-
   border: 1px solid #354149;
   border-radius: 7px;
   background: #1b252b;
   color: white;
-
   font-size: 12px;
   text-align: center;
-
   opacity: 0;
   pointer-events: none;
   transform: translateY(8px);
-
-  transition: opacity .2s ease, transform .2s ease;
+  transition: opacity .2s, transform .2s;
 }
 
 .toast.show {
@@ -1358,9 +1297,7 @@ textarea::placeholder {
   transform: translateY(0);
 }
 
-/* =========================================
-   MOBILE NAVIGATION
-========================================= */
+/* MOBILE NAVIGATION */
 
 .bottom-nav {
   display: none;
@@ -1397,6 +1334,19 @@ textarea::placeholder {
   .lower-dashboard-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .sales-overview-panel {
+    min-height: 350px;
+  }
+
+  .recent-items-panel {
+    min-height: 260px;
+  }
+
+  .activity-panel,
+  .categories-panel {
+    min-height: auto;
+  }
 }
 
 /* =========================================
@@ -1425,12 +1375,10 @@ textarea::placeholder {
     display: flex;
     align-items: center;
     gap: 9px;
-
     padding: 0;
     border: 0;
     background: transparent;
     color: white;
-
     font-size: 15px;
     font-weight: 750;
   }
@@ -1553,6 +1501,24 @@ textarea::placeholder {
     gap: 11px;
   }
 
+  .sales-overview-panel {
+    min-height: 330px;
+    padding: 16px;
+  }
+
+  .sales-overview-panel .chart-container {
+    height: 215px;
+  }
+
+  .recent-items-panel {
+    min-height: 250px;
+  }
+
+  .activity-panel,
+  .categories-panel {
+    min-height: auto;
+  }
+
   .panel {
     padding: 15px;
   }
@@ -1566,12 +1532,12 @@ textarea::placeholder {
   }
 
   .category-overview {
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 105px minmax(0, 1fr);
     gap: 13px;
   }
 
   .category-donut {
-    width: 112px;
+    width: 105px;
   }
 
   .donut-center strong {
@@ -1627,7 +1593,7 @@ textarea::placeholder {
     font-size: 9px;
   }
 
-  /* MOBILE BOTTOM BAR */
+  /* MOBILE BOTTOM NAV */
 
   .bottom-nav {
     position: fixed;
@@ -1635,13 +1601,10 @@ textarea::placeholder {
     right: 0;
     bottom: 0;
     left: 0;
-
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
-
     padding: 7px 5px calc(7px + env(safe-area-inset-bottom));
-
     border-top: 1px solid var(--border);
     background: rgba(9, 12, 14, .98);
   }
@@ -1652,17 +1615,13 @@ textarea::placeholder {
     align-items: center;
     justify-content: center;
     gap: 3px;
-
     min-width: 0;
     min-height: 48px;
     padding: 5px 2px;
-
     border: 0;
     border-radius: 6px;
-
     background: transparent;
     color: var(--muted);
-
     font-size: 10px;
     font-weight: 650;
     white-space: nowrap;
@@ -1702,9 +1661,7 @@ textarea::placeholder {
   }
 }
 
-/* =========================================
-   SMALL PHONES
-========================================= */
+/* SMALL PHONES */
 
 @media (max-width: 370px) {
   .app-container {
@@ -1729,12 +1686,12 @@ textarea::placeholder {
   }
 
   .category-overview {
-    grid-template-columns: 95px minmax(0, 1fr);
+    grid-template-columns: 90px minmax(0, 1fr);
     gap: 10px;
   }
 
   .category-donut {
-    width: 95px;
+    width: 90px;
   }
 
   .item-thumbnail {
@@ -1752,9 +1709,7 @@ textarea::placeholder {
   }
 }
 
-/* =========================================
-   ACCESSIBILITY
-========================================= */
+/* ACCESSIBILITY */
 
 @media (prefers-reduced-motion: reduce) {
   *,
