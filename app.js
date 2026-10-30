@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================
-   RESELLLEDGER — APPLICATION
+   CACHE — APPLICATION
 ========================================= */
 
 const STORAGE_KEY = "resellledger_data_v1";
@@ -342,7 +342,12 @@ function updateDashboard() {
     0
   );
 
-  $("#capitalValue").textContent = money(data.funds.capital);
+  const lifetimeInventorySpend = data.items.reduce(
+    (total, item) => total + Number(item.purchaseCost || 0),
+    0
+  );
+
+  $("#capitalValue").textContent = money(lifetimeInventorySpend);
   $("#reinvestmentValue").textContent = money(data.funds.reinvestment);
   $("#personalValue").textContent = money(data.funds.personal);
   $("#pendingValue").textContent = money(pendingTotal());
@@ -594,7 +599,6 @@ function renderCategoryBreakdown() {
     }
   ).join("");
 }
-
 /* =========================================
    RECENT ACTIVITY
 ========================================= */
@@ -1043,8 +1047,7 @@ async function saveItemForm(event) {
   const name = $("#itemName").value.trim();
   const purchaseCost = Number($("#purchaseCost").value);
   const purchaseDate = $("#purchaseDate").value;
-
-  if (!name || !purchaseDate ||
+     if (!name || !purchaseDate ||
       !Number.isFinite(purchaseCost) || purchaseCost < 0) {
     message.textContent =
       "Enter a name, valid purchase cost, and date.";
@@ -1430,7 +1433,6 @@ function showSaleForm(itemId) {
     saveSale(event, itemId);
   });
 }
-
 function saveSale(event, itemId) {
   event.preventDefault();
 
