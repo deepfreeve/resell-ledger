@@ -9,10 +9,10 @@ Record sale prices, platform fees, shipping, and other sale expenses
 Read sale screenshots locally to prefill recognized sale details
 Calculate net proceeds and estimated profit or loss
 Track pending payouts separately from paid sales
-Record recovered capital and split positive profit equally between reinvestment and personal funds
+Record recovered capital and allocate positive sale profit between reinvestment and personal funds
 View completed sales and lifetime profit
 Review monthly and category profit reports, export sales CSVs, and back up or restore account data
-Import eBay orders/sales CSVs and Listings Sales reports with preview and duplicate checks; summary reports use the report end date because they omit individual sale dates
+Import eBay orders/sales CSVs and Listings Sales reports with preview, bought-cost entry, per-sale profit splits, and duplicate checks; summary reports use the report end date because they omit individual sale dates
 Reset account inventory, sales, balances, categories, and stored item photos
 Search and filter available inventory
 Duplicate item details when purchasing multiple copies

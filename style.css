@@ -1760,9 +1760,13 @@ textarea::placeholder {
 .account-panel, .ebay-import-panel { margin-bottom: 18px; }
 .account-reset-panel { margin-bottom: 18px; }
 .account-panel .page-description { margin-bottom: 0; }
-.ebay-preview-table { min-width: 940px; }
+.ebay-preview-table { min-width: 1240px; }
 .ebay-preview-table td:first-child, .ebay-preview-table th:first-child { text-align: center; }
 .ebay-preview-table input[type="checkbox"] { accent-color: #efff00; width: 18px; height: 18px; }
+.ebay-cost-input { width: 100px; min-width: 90px; }
+.ebay-split-control { display: flex; flex-direction: column; gap: 5px; min-width: 145px; }
+.ebay-split-control input[type="range"] { width: 135px; accent-color: #efff00; }
+.ebay-split-control small { color: #92969b; font-size: 10px; white-space: nowrap; }
 .import-sku { display: block; margin-top: 4px; color: #92969b; font-size: 11px; }
 .photo-camera-label { display: inline-block; margin-top: 12px; color: #efff00; cursor: pointer; text-decoration: underline; }
 .photo-search-button { margin-top: 12px; }

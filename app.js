@@ -221,14 +221,20 @@ function allocatePaidSaleFunds(sale, item) {
   if (!item || item.purchaseCostUnknown) return;
   const net = netProceeds(sale);
   const cost = Number(item.purchaseCost) || 0;
-  const recovered = Math.max(0, Math.min(net, cost));
-  const profit = Math.max(0, net - cost);
-  const reinvestment = Math.round(profit * 50) / 100;
-  const personal = profit - reinvestment;
+  const recovered = Math.round(Math.max(0, Math.min(net, cost)) * 100) / 100;
+  const profit = Math.max(0, Math.round((net - cost) * 100) / 100);
+  const configuredPercent = Number(sale.reinvestmentPercent);
+  const reinvestmentPercent = sale.reinvestmentPercent == null ||
+    sale.reinvestmentPercent === "" || !Number.isFinite(configuredPercent)
+    ? 50
+    : Math.max(0, Math.min(100, configuredPercent));
+  const reinvestment = Math.round(profit * reinvestmentPercent) / 100;
+  const personal = Math.round((profit - reinvestment) * 100) / 100;
   data.funds.capital += recovered;
   data.funds.reinvestment += reinvestment;
   data.funds.personal += personal;
   sale.capitalRecovered = recovered;
+  sale.reinvestmentPercent = reinvestmentPercent;
   sale.reinvestmentAdded = reinvestment;
   sale.personalAdded = personal;
   sale.fundsAllocated = true;
@@ -782,6 +788,10 @@ function parseEbayCsv(text) {
           : itemSales,
         fees: listingReport ? (feeParts[unitIndex] || 0) : aggregateFees,
         shipping: listingReport ? (shippingCostParts[unitIndex] || 0) : 0,
+        purchaseCost: availableItem && !availableItem.purchaseCostUnknown
+          ? Number(availableItem.purchaseCost) || 0
+          : "",
+        reinvestmentPercent: 50,
         status: /unpaid|awaitingpayment|paymentpending/.test(normalizeCsvHeader(statusText)) ? "pending" : "paid",
         importKey,
         matchedItemId: availableItem?.id || "",
@@ -795,8 +805,12 @@ function parseEbayCsv(text) {
 
 function renderEbayPreview() {
   const rows = ebayImportRows;
+  const hasCost = (row) => row.purchaseCost !== "" && row.purchaseCost != null &&
+    Number.isFinite(Number(row.purchaseCost)) && Number(row.purchaseCost) >= 0;
   const stateLabel = (row) => ({
-    ready: row.matchedItemId ? `Match: ${data.items.find((item) => item.id === row.matchedItemId)?.name || "inventory"}` : "Add sold item; cost unknown",
+    ready: row.matchedItemId
+      ? `Match: ${data.items.find((item) => item.id === row.matchedItemId)?.name || "inventory"}${hasCost(row) ? "" : " · cost unknown"}`
+      : (hasCost(row) ? "Add sold item" : "Add sold item; cost unknown"),
     duplicate: "Already imported",
     cancelled: "Cancelled/refunded; skipped",
     invalid: "Missing sale price or date",
@@ -807,8 +821,8 @@ function renderEbayPreview() {
   const selected = selectable.filter((row) => row.include).length;
   $("#ebayPreview").innerHTML = rows.length ? `
     <table class="report-table ebay-preview-table">
-      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Fees</th><th>Shipping cost</th><th>Import action</th></tr></thead>
-      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td>${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
+      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Bought cost</th><th>Fees</th><th>Shipping cost</th><th>Profit split</th><th>Import action</th></tr></thead>
+      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" placeholder="Unknown" aria-label="Bought cost for ${escapeHtml(row.title)}" data-ebay-cost="${index}" value="${hasCost(row) ? escapeHtml(row.purchaseCost) : ""}" ${row.state === "ready" ? "" : "disabled"}></td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td><div class="ebay-split-control"><input type="range" min="0" max="100" step="1" aria-label="Reinvestment percentage for ${escapeHtml(row.title)}" data-ebay-percent="${index}" value="${row.reinvestmentPercent ?? 50}" ${row.state === "ready" ? "" : "disabled"}><small data-ebay-percent-label="${index}">${row.reinvestmentPercent ?? 50}% reinvest · ${100 - (row.reinvestmentPercent ?? 50)}% personal</small></div></td><td data-ebay-action-label="${index}">${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
     </table>` : "";
   const skipped = rows.length - selectable.length;
   const dateNote = rows.some((row) => row.dateEstimated)
@@ -843,9 +857,40 @@ function updateEbaySelection() {
   renderEbayPreview();
 }
 
+function updateEbayPreviewInputs(event) {
+  const target = event.target;
+  const rowIndex = Number(target.dataset.ebayCost ?? target.dataset.ebayPercent);
+  const row = ebayImportRows[rowIndex];
+  if (!row) return;
+
+  if (target.matches("[data-ebay-cost]")) {
+    row.purchaseCost = target.value === "" ? "" : Number(target.value);
+    const actionLabel = $("#ebayPreview").querySelector(`[data-ebay-action-label="${rowIndex}"]`);
+    if (actionLabel && row.state === "ready") {
+      const hasCost = row.purchaseCost !== "" && Number.isFinite(Number(row.purchaseCost)) && Number(row.purchaseCost) >= 0;
+      const matchedItem = data.items.find((item) => item.id === row.matchedItemId);
+      actionLabel.textContent = matchedItem
+        ? `Match: ${matchedItem.name}${hasCost ? "" : " · cost unknown"}`
+        : (hasCost ? "Add sold item" : "Add sold item; cost unknown");
+    }
+    return;
+  }
+  if (target.matches("[data-ebay-percent]")) {
+    row.reinvestmentPercent = Math.max(0, Math.min(100, Number(target.value) || 0));
+    const label = $("#ebayPreview").querySelector(`[data-ebay-percent-label="${rowIndex}"]`);
+    if (label) label.textContent = `${row.reinvestmentPercent}% reinvest · ${100 - row.reinvestmentPercent}% personal`;
+  }
+}
+
 function importSelectedEbaySales() {
   const selected = ebayImportRows.filter((row) => row.state === "ready" && row.include);
   if (!selected.length) return;
+  if (selected.some((row) => row.purchaseCost !== "" && row.purchaseCost != null &&
+      (!Number.isFinite(Number(row.purchaseCost)) || Number(row.purchaseCost) < 0))) {
+    $("#ebayImportSummary").textContent = "Enter a valid nonnegative bought cost for each selected sale, or leave it blank.";
+    $("#ebayImportSummary").classList.add("error");
+    return;
+  }
   const previousData = JSON.parse(JSON.stringify(data));
   try {
     for (const row of selected) {
@@ -858,6 +903,7 @@ function importSelectedEbaySales() {
         continue;
       }
       if (!item) {
+        const purchaseCostKnown = row.purchaseCost !== "" && row.purchaseCost != null;
         item = {
           id: makeId(),
           name: row.title,
@@ -865,17 +911,25 @@ function importSelectedEbaySales() {
           ebayItemId: row.listingId || "",
           productCategory: "other",
           listedPrice: row.price,
-          purchaseCost: 0,
-          purchaseCostUnknown: true,
+          purchaseCost: purchaseCostKnown ? Math.round(Number(row.purchaseCost) * 100) / 100 : 0,
+          purchaseCostUnknown: !purchaseCostKnown,
           purchaseDate: row.dateEstimated ? "" : row.date,
           itemCondition: "Not specified",
           photo: "",
-          notes: "Imported from eBay. Add the purchase cost to calculate profit accurately.",
+          notes: purchaseCostKnown
+            ? "Imported from eBay."
+            : "Imported from eBay. Add the purchase cost to calculate profit accurately.",
           createdAt: new Date().toISOString()
         };
         data.items.push(item);
       }
       if (item && row.listingId && !item.ebayItemId) item.ebayItemId = row.listingId;
+      if (row.purchaseCost !== "" && row.purchaseCost != null) {
+        item.purchaseCost = Math.round(Number(row.purchaseCost) * 100) / 100;
+        item.purchaseCostUnknown = false;
+      } else {
+        item.purchaseCostUnknown = true;
+      }
       const sale = {
         id: makeId(),
         itemId: item.id,
@@ -887,6 +941,7 @@ function importSelectedEbaySales() {
         saleDateEstimated: Boolean(row.dateEstimated),
         saleReportStartDate: row.dateEstimated ? row.reportStartDate : "",
         saleReportEndDate: row.dateEstimated ? row.reportEndDate : "",
+        reinvestmentPercent: Math.max(0, Math.min(100, Number(row.reinvestmentPercent ?? 50))),
         status: row.status,
         createdAt: new Date().toISOString(),
         source: "ebay",
@@ -922,6 +977,7 @@ function importSelectedEbaySales() {
 
 function setupEbayImport() {
   $("#ebayCsvFile").addEventListener("change", previewEbayCsv);
+  $("#ebayPreview").addEventListener("input", updateEbayPreviewInputs);
   $("#ebayPreview").addEventListener("change", (event) => {
     if (event.target.matches("[data-ebay-row]")) updateEbaySelection();
     if (event.target.matches("[data-ebay-select-all]")) {
@@ -1965,6 +2021,10 @@ function openItemDetails(itemId) {
     html += detailBox("Net proceeds", money(netProceeds(sale)));
     html += detailBox("Profit / loss", saleProfit(sale) === null ? "Add purchase cost to calculate" : money(saleProfit(sale)));
     html += detailBox("Sale date", formatDate(sale.saleDate));
+    if (sale.reinvestmentPercent !== undefined) {
+      const reinvestPercent = Math.max(0, Math.min(100, Number(sale.reinvestmentPercent) || 0));
+      html += detailBox("Profit split", `${reinvestPercent}% reinvest · ${100 - reinvestPercent}% personal`);
+    }
     if (sale.saleDateEstimated) {
       html += `<p class="field-hint sale-date-estimate">The eBay report gave a date range, not an exact sale date. This sale is dated to the report end: ${escapeHtml(formatDate(sale.saleReportEndDate || sale.saleDate))}.</p>`;
     }
