@@ -3,78 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101114">
+  <meta name="theme-color" content="#101010">
   <title>ResellLedger</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <!-- DESKTOP SIDEBAR -->
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
   <aside class="sidebar">
 
-    <button class="brand brand-home-button" type="button" data-page="home">
+    <button class="brand" type="button" data-page="home">
       <span class="brand-icon">R</span>
-      <span class="brand-copy">
-        <span class="brand-title">ResellLedger</span>
-        <span class="brand-subtitle">Reselling management</span>
-      </span>
+      <span class="brand-title">ResellLedger</span>
     </button>
 
     <div class="sidebar-section">
       <p class="sidebar-label">WORKSPACE</p>
 
-      <button class="sidebar-link active" type="button" data-page="home">
-        <span>⌂</span> Dashboard
+      <button class="sidebar-link active" data-page="home" type="button">
+        <span class="nav-icon">⌂</span> Dashboard
       </button>
 
-      <button class="sidebar-link" type="button" data-page="inventory">
-        <span>▤</span> Inventory
+      <button class="sidebar-link" data-page="inventory" type="button">
+        <span class="nav-icon">▤</span> Inventory
       </button>
 
-      <button class="sidebar-link" type="button" data-page="add">
-        <span>＋</span> Add item
+      <button class="sidebar-link" data-page="add" type="button">
+        <span class="nav-icon">＋</span> Add item
       </button>
     </div>
 
     <div class="sidebar-section">
       <p class="sidebar-label">SALES</p>
 
-      <button class="sidebar-link" type="button" data-page="pending">
-        <span>◷</span> Pending payouts
+      <button class="sidebar-link" data-page="pending" type="button">
+        <span class="nav-icon">◷</span> Pending payouts
       </button>
 
-      <button class="sidebar-link" type="button" data-page="sold">
-        <span>✓</span> Completed sales
+      <button class="sidebar-link" data-page="sold" type="button">
+        <span class="nav-icon">✓</span> Completed sales
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <p class="sidebar-label">MANAGEMENT</p>
+
+      <button class="sidebar-link" data-page="inventory" type="button">
+        <span class="nav-icon">▦</span> Products
       </button>
     </div>
 
     <div class="sidebar-bottom">
-      <div class="sidebar-status">
+
+      <div class="sidebar-profit">
+        <span>Total profit</span>
+        <strong id="sidebarProfit">$0.00</strong>
+        <small>Lifetime earnings</small>
+      </div>
+
+      <div class="sidebar-storage">
         <span class="status-dot"></span>
         Local storage active
       </div>
-      <p>ResellLedger</p>
+
+      <p class="sidebar-version">ResellLedger · Personal edition</p>
+
     </div>
 
   </aside>
 
 
-  <!-- MAIN APPLICATION -->
+  <!-- MAIN CONTENT -->
   <div class="main-wrapper">
 
-    <!-- TOP HEADER -->
+    <!-- TOPBAR -->
     <header class="topbar">
 
       <div class="topbar-left">
+
         <button class="mobile-brand" type="button" data-page="home">
           <span class="brand-icon">R</span>
-          <span>ResellLedger</span>
+          ResellLedger
         </button>
 
         <div class="desktop-page-title" id="currentPageTitle">
           Dashboard
         </div>
+
       </div>
 
       <div class="topbar-right">
@@ -84,7 +102,7 @@
           <input
             type="search"
             id="globalSearch"
-            placeholder="Search inventory..."
+            placeholder="Search inventory, items, categories..."
             aria-label="Search inventory"
           >
         </div>
@@ -101,171 +119,254 @@
     <main class="app-container">
 
 
-      <!-- ================= DASHBOARD ================= -->
-
+      <!-- DASHBOARD -->
       <section class="page active" id="page-home">
 
         <div class="dashboard-heading">
+
           <div>
             <p class="eyebrow">BUSINESS OVERVIEW</p>
-            <h1>Dashboard</h1>
+            <h1>Welcome back.</h1>
             <p class="page-description">
               Here's what's happening with your reselling business.
             </p>
           </div>
 
           <button class="primary-button" id="quickAddButton" type="button">
-            + Add inventory
+            ＋ Add inventory
           </button>
+
         </div>
 
 
-        <!-- FINANCIAL STATISTICS -->
-
+        <!-- MAIN STATISTICS -->
         <div class="stats-grid">
 
+          <article class="stat-card inventory-status-card">
+            <div class="stat-top">
+              <span>Inventory status</span>
+              <span class="stat-icon">▤</span>
+            </div>
+
+            <div class="inventory-status-content">
+              <div class="inventory-status-line">
+                <span class="status-dot"></span>
+                <span>In stock</span>
+                <strong id="inStockCount">0</strong>
+              </div>
+
+              <div class="inventory-status-line">
+                <span class="status-dot sold-dot"></span>
+                <span>Sold</span>
+                <strong id="soldCount">0</strong>
+              </div>
+
+              <div class="inventory-status-line">
+                <span class="status-dot pending-dot"></span>
+                <span>Awaiting payout</span>
+                <strong id="pendingCount">0</strong>
+              </div>
+            </div>
+
+            <div class="inventory-status-footer">
+              <span id="inventoryStatusTotal">0 total items</span>
+              <button type="button" class="text-button" data-page="inventory">
+                View inventory →
+              </button>
+            </div>
+          </article>
+
+
           <article class="stat-card">
             <div class="stat-top">
-              <span>Total capital recovered</span>
+              <span>Total inventory</span>
+              <span class="stat-icon">◇</span>
+            </div>
+
+            <h2 id="totalInventoryValue">0</h2>
+            <p>Items currently in stock</p>
+          </article>
+
+
+          <article class="stat-card">
+            <div class="stat-top">
+              <span>Inventory value</span>
               <span class="stat-icon">$</span>
             </div>
-            <h2 id="capitalValue">$0.00</h2>
-            <p>Money recovered from sales</p>
+
+            <h2 id="inventoryValue">$0.00</h2>
+            <p>Combined purchase cost</p>
           </article>
 
-          <article class="stat-card">
-            <div class="stat-top">
-              <span>Reinvestment funds</span>
-              <span class="stat-icon">↗</span>
-            </div>
-            <h2 id="reinvestmentValue">$0.00</h2>
-            <p>Available for future purchases</p>
-          </article>
-
-          <article class="stat-card">
-            <div class="stat-top">
-              <span>Personal funds</span>
-              <span class="stat-icon">◈</span>
-            </div>
-            <h2 id="personalValue">$0.00</h2>
-            <p>Your allocated profit</p>
-          </article>
 
           <article class="stat-card">
             <div class="stat-top">
               <span>Pending payouts</span>
               <span class="stat-icon">◷</span>
             </div>
+
             <h2 id="pendingValue">$0.00</h2>
-            <p>Awaiting payment</p>
+            <p>Money awaiting payment</p>
           </article>
 
         </div>
 
 
-        <!-- LIFETIME PROFIT -->
+        <!-- FINANCIAL OVERVIEW -->
+        <div class="financial-grid">
 
-        <section class="panel profit-panel">
-
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">BUSINESS PERFORMANCE</p>
-              <h3>Lifetime profit</h3>
+          <article class="stat-card financial-card">
+            <div class="stat-top">
+              <span>Capital recovered</span>
+              <span class="stat-icon">$</span>
             </div>
 
-            <span class="panel-badge">All time</span>
-          </div>
+            <h2 id="capitalValue">$0.00</h2>
+            <p>Money recovered from sales</p>
+          </article>
 
-          <h2 class="profit-number" id="lifetimeProfitValue">
-            $0.00
-          </h2>
-
-          <p class="muted-text">
-            Total realized profit from completed sales.
-          </p>
-
-        </section>
-
-
-        <!-- QUICK ACTIONS -->
-
-        <section class="panel">
-
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">SHORTCUTS</p>
-              <h3>Quick actions</h3>
-            </div>
-          </div>
-
-          <div class="quick-actions">
-
-            <button
-              class="primary-button"
-              type="button"
-              data-page="add"
-            >
-              + Add item
-            </button>
-
-            <button
-              class="secondary-button"
-              type="button"
-              data-page="inventory"
-            >
-              View inventory
-            </button>
-
-            <button
-              class="secondary-button"
-              type="button"
-              data-page="pending"
-            >
-              Pending payouts
-            </button>
-
-            <button
-              class="secondary-button"
-              type="button"
-              data-page="sold"
-            >
-              Sales history
-            </button>
-
-          </div>
-
-        </section>
-
-
-        <!-- RECENT INVENTORY -->
-
-        <section class="panel">
-
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">YOUR STOCK</p>
-              <h3>Recently added</h3>
+          <article class="stat-card financial-card">
+            <div class="stat-top">
+              <span>Reinvestment funds</span>
+              <span class="stat-icon">↗</span>
             </div>
 
-            <button
-              class="text-button"
-              type="button"
-              data-page="inventory"
-            >
-              View all →
-            </button>
-          </div>
+            <h2 id="reinvestmentValue">$0.00</h2>
+            <p>Available for new purchases</p>
+          </article>
 
-          <div id="recentInventory" class="item-list"></div>
+          <article class="stat-card financial-card">
+            <div class="stat-top">
+              <span>Personal funds</span>
+              <span class="stat-icon">◈</span>
+            </div>
 
-        </section>
+            <h2 id="personalValue">$0.00</h2>
+            <p>Your allocated profit</p>
+          </article>
+
+          <article class="stat-card financial-card profit-card">
+            <div class="stat-top">
+              <span>Lifetime profit</span>
+              <span class="stat-icon">↗</span>
+            </div>
+
+            <h2 id="lifetimeProfitValue">$0.00</h2>
+            <p>Total realized profit</p>
+          </article>
+
+        </div>
+
+
+        <!-- MAIN DASHBOARD ROW -->
+        <div class="dashboard-grid">
+
+          <!-- RECENT INVENTORY -->
+          <section class="panel recent-items-panel">
+
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">YOUR STOCK</p>
+                <h3>Recent inventory</h3>
+              </div>
+
+              <button class="secondary-button" type="button" data-page="inventory">
+                View all →
+              </button>
+            </div>
+
+            <div id="recentInventory" class="item-list"></div>
+
+          </section>
+
+
+          <!-- SALES OVERVIEW -->
+          <section class="panel sales-overview-panel">
+
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">BUSINESS PERFORMANCE</p>
+                <h3>Sales overview</h3>
+              </div>
+
+              <span class="panel-badge">All time</span>
+            </div>
+
+            <div class="chart-summary">
+              <strong id="salesOverviewTotal">$0.00</strong>
+              <span>Total recorded sales</span>
+            </div>
+
+            <div class="chart-container">
+              <canvas id="salesChart"></canvas>
+            </div>
+
+            <div class="chart-footer">
+              <span>Sales revenue</span>
+              <span id="salesChartPeriod">Historical sales</span>
+            </div>
+
+          </section>
+
+        </div>
+
+
+        <!-- LOWER DASHBOARD ROW -->
+        <div class="dashboard-grid lower-dashboard-grid">
+
+          <!-- CATEGORY BREAKDOWN -->
+          <section class="panel categories-panel">
+
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">INVENTORY BREAKDOWN</p>
+                <h3>Top categories</h3>
+              </div>
+            </div>
+
+            <div class="category-overview">
+
+              <div class="category-donut" id="categoryDonut">
+                <div class="donut-center">
+                  <strong id="categoryTotal">0</strong>
+                  <span>Items</span>
+                </div>
+              </div>
+
+              <div class="category-legend" id="categoryLegend">
+                <p class="muted-text">Your categories will appear here.</p>
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- RECENT ACTIVITY -->
+          <section class="panel activity-panel">
+
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">LATEST UPDATES</p>
+                <h3>Recent activity</h3>
+              </div>
+            </div>
+
+            <div id="recentActivity" class="activity-list">
+              <div class="empty-state">
+                <h3>No activity yet</h3>
+                <p>Your recent inventory and sales activity will appear here.</p>
+              </div>
+            </div>
+
+          </section>
+
+        </div>
 
       </section>
 
 
-
-      <!-- ================= INVENTORY ================= -->
-
+      <!-- INVENTORY -->
       <section class="page" id="page-inventory">
 
         <div class="page-heading">
@@ -277,12 +378,8 @@
             </p>
           </div>
 
-          <button
-            class="primary-button"
-            type="button"
-            data-page="add"
-          >
-            + Add item
+          <button class="primary-button" type="button" data-page="add">
+            ＋ Add item
           </button>
         </div>
 
@@ -306,9 +403,7 @@
       </section>
 
 
-
-      <!-- ================= ADD ITEM ================= -->
-
+      <!-- ADD ITEM -->
       <section class="page" id="page-add">
 
         <div class="page-heading">
@@ -320,7 +415,6 @@
             </p>
           </div>
         </div>
-
 
         <form id="itemForm" class="panel form-panel">
 
@@ -335,36 +429,26 @@
             >
           </div>
 
-
           <div class="form-row">
 
             <div class="form-group">
               <label for="productCategory">Category *</label>
-              <select
-                id="productCategory"
-                name="productCategory"
-                required
-              ></select>
+              <select id="productCategory" name="productCategory" required></select>
             </div>
 
             <div class="form-group">
               <label for="itemCondition">Condition</label>
-              <select
-                id="itemCondition"
-                name="itemCondition"
-              >
+              <select id="itemCondition" name="itemCondition">
                 <option>Not specified</option>
               </select>
             </div>
 
           </div>
 
-
           <div id="cardFields">
 
             <div class="form-group">
               <label for="cardType">Card type</label>
-
               <select id="cardType" name="cardType">
                 <option value="raw">Raw / ungraded</option>
                 <option value="graded">Graded</option>
@@ -375,7 +459,6 @@
 
               <div class="form-group">
                 <label for="gradingCompany">Grading company</label>
-
                 <select id="gradingCompany" name="gradingCompany">
                   <option value="">Not specified</option>
                   <option>PSA</option>
@@ -388,36 +471,22 @@
 
               <div class="form-group">
                 <label for="cardGrade">Grade</label>
-
-                <input
-                  id="cardGrade"
-                  name="cardGrade"
-                  type="text"
-                  placeholder="e.g. 10"
-                >
+                <input id="cardGrade" name="cardGrade" type="text" placeholder="e.g. 10">
               </div>
 
             </div>
 
             <div class="form-group">
               <label for="certNumber">Certification number</label>
-
-              <input
-                id="certNumber"
-                name="certNumber"
-                type="text"
-                placeholder="Optional"
-              >
+              <input id="certNumber" name="certNumber" type="text" placeholder="Optional">
             </div>
 
           </div>
-
 
           <div class="form-row">
 
             <div class="form-group">
               <label for="purchaseCost">Purchase cost ($) *</label>
-
               <input
                 id="purchaseCost"
                 name="purchaseCost"
@@ -431,21 +500,13 @@
 
             <div class="form-group">
               <label for="purchaseDate">Purchase date *</label>
-
-              <input
-                id="purchaseDate"
-                name="purchaseDate"
-                type="date"
-                required
-              >
+              <input id="purchaseDate" name="purchaseDate" type="date" required>
             </div>
 
           </div>
 
-
           <div class="form-group">
             <label for="itemNotes">Notes</label>
-
             <textarea
               id="itemNotes"
               name="itemNotes"
@@ -454,30 +515,15 @@
             ></textarea>
           </div>
 
-
           <div class="form-group">
             <label for="itemPhoto">Product photo</label>
-
-            <input
-              id="itemPhoto"
-              name="itemPhoto"
-              type="file"
-              accept="image/*"
-            >
-
-            <p class="field-hint">
-              Choose an image smaller than 2 MB.
-            </p>
+            <input id="itemPhoto" name="itemPhoto" type="file" accept="image/*">
+            <p class="field-hint">Choose an image smaller than 2 MB.</p>
           </div>
-
 
           <p id="formMessage" class="form-message" role="status"></p>
 
-          <button
-            class="primary-button full-button"
-            id="itemFormSubmit"
-            type="submit"
-          >
+          <button class="primary-button full-button" id="itemFormSubmit" type="submit">
             Save item
           </button>
 
@@ -486,9 +532,7 @@
       </section>
 
 
-
-      <!-- ================= PENDING PAYOUTS ================= -->
-
+      <!-- PENDING PAYOUTS -->
       <section class="page" id="page-pending">
 
         <div class="page-heading">
@@ -506,9 +550,7 @@
       </section>
 
 
-
-      <!-- ================= COMPLETED SALES ================= -->
-
+      <!-- COMPLETED SALES -->
       <section class="page" id="page-sold">
 
         <div class="page-heading">
@@ -530,112 +572,81 @@
 
   </div>
 
+</div>
 
 
-  <!-- MOBILE NAVIGATION -->
+<!-- MOBILE NAVIGATION -->
+<nav class="bottom-nav" aria-label="Main navigation">
 
-  <nav class="bottom-nav" aria-label="Main navigation">
+  <button class="nav-button active" type="button" data-page="home">
+    <span class="nav-icon">⌂</span>
+    <span>Home</span>
+  </button>
 
-    <button
-      class="nav-button active"
-      type="button"
-      data-page="home"
-    >
-      <span class="nav-icon">⌂</span>
-      <span>Home</span>
-    </button>
+  <button class="nav-button" type="button" data-page="inventory">
+    <span class="nav-icon">▤</span>
+    <span>Inventory</span>
+  </button>
 
-    <button
-      class="nav-button"
-      type="button"
-      data-page="inventory"
-    >
-      <span class="nav-icon">▤</span>
-      <span>Inventory</span>
-    </button>
+  <button class="nav-button add-nav-button" type="button" data-page="add">
+    <span class="nav-icon">＋</span>
+    <span>Add</span>
+  </button>
 
-    <button
-      class="nav-button add-nav-button"
-      type="button"
-      data-page="add"
-    >
-      <span class="nav-icon">＋</span>
-      <span>Add</span>
-    </button>
+  <button class="nav-button" type="button" data-page="pending">
+    <span class="nav-icon">◷</span>
+    <span>Pending</span>
+  </button>
 
-    <button
-      class="nav-button"
-      type="button"
-      data-page="pending"
-    >
-      <span class="nav-icon">◷</span>
-      <span>Pending</span>
-    </button>
+  <button class="nav-button" type="button" data-page="sold">
+    <span class="nav-icon">✓</span>
+    <span>Sold</span>
+  </button>
 
-    <button
-      class="nav-button"
-      type="button"
-      data-page="sold"
-    >
-      <span class="nav-icon">✓</span>
-      <span>Sold</span>
-    </button>
-
-  </nav>
+</nav>
 
 
+<!-- ITEM DETAILS MODAL -->
+<div
+  id="itemDetails"
+  class="details-overlay hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="detailsTitle"
+>
 
-  <!-- TOAST NOTIFICATIONS -->
+  <section class="details-panel">
 
-  <div
-    id="toast"
-    class="toast"
-    role="status"
-    aria-live="polite"
-  ></div>
+    <div class="details-header">
 
-
-
-  <!-- ITEM DETAILS MODAL -->
-
-  <div
-    id="itemDetails"
-    class="details-overlay hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="detailsTitle"
-  >
-
-    <section class="details-panel">
-
-      <div class="details-header">
-
-        <div>
-          <h2 id="detailsTitle">Item details</h2>
-          <p id="detailsSubtitle"></p>
-        </div>
-
-        <button
-          class="icon-button"
-          id="closeDetails"
-          type="button"
-          aria-label="Close details"
-        >
-          ×
-        </button>
-
+      <div>
+        <h2 id="detailsTitle">Item details</h2>
+        <p id="detailsSubtitle"></p>
       </div>
 
-      <div id="detailsContent"></div>
+      <button
+        class="icon-button"
+        id="closeDetails"
+        type="button"
+        aria-label="Close details"
+      >
+        ×
+      </button>
 
-    </section>
+    </div>
 
-  </div>
+    <div id="detailsContent"></div>
+
+  </section>
+
+</div>
 
 
-  <!-- APPLICATION SCRIPT -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="app.js"></script>
 
 </body>
 </html>
