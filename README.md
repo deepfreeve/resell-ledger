@@ -12,7 +12,7 @@ Track pending payouts separately from paid sales
 Record recovered capital and split positive profit equally between reinvestment and personal funds
 View completed sales and lifetime profit
 Review monthly and category profit reports, export sales CSVs, and back up or restore account data
-Import eBay order/sales CSVs from the account page, with preview and duplicate checks
+Import eBay orders/sales CSVs and Listings Sales reports with preview and duplicate checks; summary reports use the report end date because they omit individual sale dates
 Reset account inventory, sales, balances, categories, and stored item photos
 Search and filter available inventory
 Duplicate item details when purchasing multiple copies

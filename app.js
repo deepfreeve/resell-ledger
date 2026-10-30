@@ -479,10 +479,13 @@ function csvCell(value) {
 }
 
 function exportSalesCsv() {
-  const headers = ["Item", "Category", "Sale date", "Status", "Sale price", "Platform fees", "Shipping", "Other costs", "Net proceeds", "Purchase cost", "Realized profit"];
+  const headers = ["Item", "Category", "Sale date", "Sale date source", "Status", "Sale price", "Platform fees", "Shipping", "Other costs", "Net proceeds", "Purchase cost", "Realized profit"];
   const rows = data.sales.map((sale) => {
     const item = data.items.find((entry) => entry.id === sale.itemId);
-    return [item?.name || "", item ? categoryName(item) : "Other", sale.saleDate, sale.status,
+    const saleDateSource = sale.saleDateEstimated
+      ? `Estimated from eBay report through ${sale.saleReportEndDate || sale.saleDate}`
+      : "Recorded sale date";
+    return [item?.name || "", item ? categoryName(item) : "Other", sale.saleDate, saleDateSource, sale.status,
       sale.salePrice, sale.platformFees, sale.shipping, sale.otherCosts, netProceeds(sale),
       item?.purchaseCost || 0, sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
   });
@@ -632,6 +635,13 @@ function parseCsvDate(value) {
     const year = us[3].length === 2 ? Number(us[3]) + (Number(us[3]) < 70 ? 2000 : 1900) : Number(us[3]);
     return validatedDate(year, us[1], us[2]);
   }
+  const english = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (english) {
+    const monthNumber = new Date(english[1] + " 1, 2000").getMonth() + 1;
+    if (monthNumber >= 1 && monthNumber <= 12) {
+      return validatedDate(english[3], monthNumber, english[2]);
+    }
+  }
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -647,23 +657,49 @@ function ebayRowKey(parts) {
   return `ebay-${(hash >>> 0).toString(16)}`;
 }
 
+function splitCsvAmount(value, quantity) {
+  const cents = Math.round((Number(value) || 0) * 100);
+  const sign = cents < 0 ? -1 : 1;
+  const absoluteCents = Math.abs(cents);
+  const baseCents = Math.floor(absoluteCents / quantity);
+  const extraCents = absoluteCents % quantity;
+  return Array.from({ length: quantity }, (_, index) =>
+    sign * (baseCents + (index < extraCents ? 1 : 0)) / 100
+  );
+}
+
 function parseEbayCsv(text) {
   const rows = parseCsv(text);
+  const reportLabel = rows.flat().find((cell) => /^\s*Report for\s+/i.test(cell)) || "";
+  const reportDateMatch = reportLabel.match(/^\s*Report for\s+(.+?)\s+to\s+(.+?)\s*$/i);
+  const reportStartDate = reportDateMatch ? parseCsvDate(reportDateMatch[1]) : "";
+  const reportEndDate = reportDateMatch ? parseCsvDate(reportDateMatch[2]) : "";
   const headerIndex = rows.findIndex((row) => {
     const headers = row.map(normalizeCsvHeader);
     const hasTitle = headers.some((value) => ["itemtitle", "title", "item", "listingtitle"].some((alias) => value === alias || (alias !== "item" && value.startsWith(alias))));
-    const hasPrice = headers.some((value) => ["soldfor", "saleprice", "itemprice", "price", "itemsaleprice", "itemsoldfor", "saleamount", "grossamount"].some((alias) => value === alias || value.startsWith(alias)));
-    return hasTitle && hasPrice;
+    const hasTransactionPrice = headers.some((value) => ["soldfor", "saleprice", "itemprice", "price", "itemsaleprice", "itemsoldfor", "saleamount", "grossamount"].some((alias) => value === alias || value.startsWith(alias)));
+    const hasListingReportFields = headers.includes("itemsales") && headers.includes("quantitysold") && headers.includes("totalsellingcosts");
+    return hasTitle && (hasTransactionPrice || hasListingReportFields);
   });
   if (headerIndex < 0) throw new Error("I couldn't find the item title and sale price columns. Choose an eBay orders or sales CSV.");
 
   const headers = rows[headerIndex];
   const titleColumn = findCsvColumn(headers, ["itemtitle", "listingtitle", "title", "item"]);
   const skuColumn = findCsvColumn(headers, ["customlabelsku", "customlabel", "sku"]);
-  const priceColumn = findCsvColumn(headers, ["soldfor", "saleprice", "itemsoldfor", "itemsaleprice", "itemprice", "itemsaleamount", "saleamount", "grossamount", "price"]);
+  const itemSalesColumn = findCsvColumn(headers, ["itemsales"]);
+  const quantityColumn = findCsvColumn(headers, ["quantitysold"]);
+  const totalSellingCostsColumn = findCsvColumn(headers, ["totalsellingcosts"]);
+  const listingReport = itemSalesColumn >= 0 && quantityColumn >= 0 && totalSellingCostsColumn >= 0;
+  if (listingReport && (!reportStartDate || !reportEndDate)) {
+    throw new Error("This eBay listings report is missing its report date range, so sales can't be backdated safely.");
+  }
+  const priceColumn = listingReport ? itemSalesColumn : findCsvColumn(headers, ["soldfor", "saleprice", "itemsoldfor", "itemsaleprice", "itemprice", "itemsaleamount", "saleamount", "grossamount", "price"]);
   const dateColumn = findCsvColumn(headers, ["ordercreationdate", "dateofsale", "saledate", "datesold", "orderdate", "creationdate", "date"]);
   const statusColumn = findCsvColumn(headers, ["paymentstatus", "orderstatus", "status"]);
-  const idColumns = ["salesrecordnumber", "ordernumber", "orderid", "transactionid", "itemnumber"]
+  const listingIdColumn = findCsvColumn(headers, ["ebayitemid", "listingid"]);
+  const shippingRevenueColumn = findCsvColumn(headers, ["shippingandhandlingpaidbybuyertoyou"]);
+  const shippingLabelCostColumn = findCsvColumn(headers, ["shippinglabelscost"]);
+  const idColumns = ["salesrecordnumber", "ordernumber", "orderid", "transactionid", "itemnumber", "ebayitemid"]
     .map((alias) => findCsvColumn(headers, [alias])).filter((index) => index >= 0);
   const feeColumns = headers.map((header, index) => ({ name: normalizeCsvHeader(header), index }))
     .filter(({ name }) => name.includes("fee") && !name.includes("refund") && !name.includes("tax"))
@@ -678,45 +714,83 @@ function parseEbayCsv(text) {
   const reservedItemIds = new Set();
   const importedKeys = new Set(data.sales.filter((sale) => sale.source === "ebay").map((sale) => sale.externalId));
 
-  return rows.slice(headerIndex + 1).map((cells, offset) => {
+  return rows.slice(headerIndex + 1).flatMap((cells, offset) => {
     const value = (column) => column < 0 ? "" : (cells[column] || "").trim();
     const title = value(titleColumn);
-    const price = parseCsvMoney(value(priceColumn));
-    const date = parseCsvDate(value(dateColumn));
+    const itemSales = parseCsvMoney(value(priceColumn));
+    const date = listingReport ? reportEndDate : parseCsvDate(value(dateColumn));
     const sku = value(skuColumn);
-    if (!title) return null;
-    const feeTotal = feeColumns.reduce((total, column) => total + Math.abs(parseCsvMoney(value(column)) || 0), 0);
+    if (!title) return [];
     const statusText = value(statusColumn).toLowerCase();
     const identity = idColumns.map(value).filter(Boolean);
-    const importKey = ebayRowKey([...identity, sku, title, date, price, identity.length ? "" : offset]);
-    const candidates = sku ? (inventoryBySku.get(sku.toLowerCase()) || []) : [];
-    const namedCandidates = candidates.length ? candidates : data.items.filter((item) => titleKey(item.name) === titleKey(title));
-    const availableItem = namedCandidates.find((item) => !getSaleForItem(item.id) && !reservedItemIds.has(item.id));
-    if (availableItem) reservedItemIds.add(availableItem.id);
-    const priorSale = namedCandidates.length > 0 && namedCandidates.every((item) => getSaleForItem(item.id));
-    const repeatedInFile = seenKeys.has(importKey);
-    seenKeys.add(importKey);
+    const listingId = value(listingIdColumn);
+    const quantityValue = listingReport ? Number.parseInt(value(quantityColumn), 10) : 1;
+    const quantity = Number.isFinite(quantityValue) && quantityValue > 0 ? Math.min(quantityValue, 1000) : 1;
+    const shippingRevenue = listingReport ? (parseCsvMoney(value(shippingRevenueColumn)) || 0) : 0;
+    const shippingLabelCost = listingReport ? (parseCsvMoney(value(shippingLabelCostColumn)) || 0) : 0;
+    const reportCosts = listingReport ? parseCsvMoney(value(totalSellingCostsColumn)) : null;
+    const aggregateFees = listingReport && reportCosts !== null
+      ? reportCosts - shippingLabelCost
+      : feeColumns.reduce((total, column) => total + Math.abs(parseCsvMoney(value(column)) || 0), 0);
+    const itemSalesParts = listingReport && itemSales !== null ? splitCsvAmount(itemSales, quantity) : [];
+    const shippingRevenueParts = listingReport ? splitCsvAmount(shippingRevenue, quantity) : [];
+    const feeParts = listingReport ? splitCsvAmount(aggregateFees, quantity) : [];
+    const shippingCostParts = listingReport ? splitCsvAmount(shippingLabelCost, quantity) : [];
+    const candidatesByListingId = listingId
+      ? data.items.filter((item) => String(item.ebayItemId || "") === listingId)
+      : [];
+    const skuCandidates = sku ? (inventoryBySku.get(sku.toLowerCase()) || []) : [];
+    const titleCandidates = data.items.filter((item) => titleKey(item.name) === titleKey(title));
+    const namedCandidates = candidatesByListingId.length
+      ? candidatesByListingId
+      : (skuCandidates.length ? skuCandidates : titleCandidates);
+    const existingSoldCount = namedCandidates.filter((item) => getSaleForItem(item.id)).length;
+    const copies = [];
 
-    let state = "ready";
-    if (importedKeys.has(importKey) || repeatedInFile) state = "duplicate";
-    else if (/cancel|refund|void/.test(statusText)) state = "cancelled";
-    else if (!date || price === null) state = "invalid";
-    else if (priorSale) state = "already-sold";
+    for (let unitIndex = 0; unitIndex < quantity; unitIndex += 1) {
+      const unitIdentity = listingReport
+        ? [listingId || title, reportStartDate, reportEndDate, unitIndex + 1]
+        : [...identity, sku, title, date, itemSales, identity.length ? "" : offset];
+      const importKey = ebayRowKey(unitIdentity);
+      const availableItem = namedCandidates.find((item) => !getSaleForItem(item.id) && !reservedItemIds.has(item.id));
+      if (availableItem) reservedItemIds.add(availableItem.id);
+      const priorSale = listingReport
+        ? (!availableItem && unitIndex < existingSoldCount)
+        : (namedCandidates.length > 0 && !availableItem);
+      const repeatedInFile = seenKeys.has(importKey);
+      seenKeys.add(importKey);
 
-    return {
-      rowNumber: headerIndex + offset + 2,
-      title,
-      sku,
-      date,
-      price,
-      fees: feeTotal,
-      status: /unpaid|awaitingpayment|paymentpending/.test(normalizeCsvHeader(statusText)) ? "pending" : "paid",
-      importKey,
-      matchedItemId: availableItem?.id || "",
-      state,
-      include: state === "ready"
-    };
-  }).filter(Boolean);
+      let state = "ready";
+      if (importedKeys.has(importKey) || repeatedInFile) state = "duplicate";
+      else if (/cancel|refund|void/.test(statusText)) state = "cancelled";
+      else if (!date || itemSales === null || (listingReport && (reportCosts === null || !Number.isFinite(quantityValue) || quantityValue < 1 || quantityValue > 1000))) state = "invalid";
+      else if (priorSale) state = "already-sold";
+
+      copies.push({
+        rowNumber: headerIndex + offset + 2,
+        title,
+        sku,
+        listingId,
+        date,
+        dateEstimated: listingReport,
+        reportStartDate,
+        reportEndDate,
+        unitIndex: unitIndex + 1,
+        unitCount: quantity,
+        price: listingReport
+          ? Math.round(((itemSalesParts[unitIndex] || 0) + (shippingRevenueParts[unitIndex] || 0)) * 100) / 100
+          : itemSales,
+        fees: listingReport ? (feeParts[unitIndex] || 0) : aggregateFees,
+        shipping: listingReport ? (shippingCostParts[unitIndex] || 0) : 0,
+        status: /unpaid|awaitingpayment|paymentpending/.test(normalizeCsvHeader(statusText)) ? "pending" : "paid",
+        importKey,
+        matchedItemId: availableItem?.id || "",
+        state,
+        include: state === "ready"
+      });
+    }
+    return copies;
+  });
 }
 
 function renderEbayPreview() {
@@ -733,12 +807,15 @@ function renderEbayPreview() {
   const selected = selectable.filter((row) => row.include).length;
   $("#ebayPreview").innerHTML = rows.length ? `
     <table class="report-table ebay-preview-table">
-      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Fees</th><th>Import action</th></tr></thead>
-      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}</td><td>${row.price === null ? "—" : money(row.price)}</td><td>${money(row.fees)}</td><td>${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
+      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Fees</th><th>Shipping cost</th><th>Import action</th></tr></thead>
+      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td>${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
     </table>` : "";
   const skipped = rows.length - selectable.length;
+  const dateNote = rows.some((row) => row.dateEstimated)
+    ? ` The report has no individual sale dates; each sale is dated to the report end (${formatDate(rows.find((row) => row.dateEstimated).reportEndDate)}).`
+    : "";
   $("#ebayImportSummary").textContent = rows.length
-    ? `${rows.length} sale rows found · ${selected} selected · ${skipped} skipped or already imported. Buyer names, addresses, and emails are ignored.`
+    ? `${rows.length} sale rows found · ${selected} selected · ${skipped} skipped or already imported. Buyer names, addresses, and emails are ignored.${dateNote}`
     : "";
   $("#importEbayButton").disabled = selected === 0;
   $("#cancelEbayImportButton").hidden = rows.length === 0;
@@ -785,11 +862,12 @@ function importSelectedEbaySales() {
           id: makeId(),
           name: row.title,
           sku: row.sku,
+          ebayItemId: row.listingId || "",
           productCategory: "other",
           listedPrice: row.price,
           purchaseCost: 0,
           purchaseCostUnknown: true,
-          purchaseDate: row.date,
+          purchaseDate: row.dateEstimated ? "" : row.date,
           itemCondition: "Not specified",
           photo: "",
           notes: "Imported from eBay. Add the purchase cost to calculate profit accurately.",
@@ -797,14 +875,18 @@ function importSelectedEbaySales() {
         };
         data.items.push(item);
       }
+      if (item && row.listingId && !item.ebayItemId) item.ebayItemId = row.listingId;
       const sale = {
         id: makeId(),
         itemId: item.id,
         salePrice: row.price,
         platformFees: row.fees,
-        shipping: 0,
+        shipping: row.shipping || 0,
         otherCosts: 0,
         saleDate: row.date,
+        saleDateEstimated: Boolean(row.dateEstimated),
+        saleReportStartDate: row.dateEstimated ? row.reportStartDate : "",
+        saleReportEndDate: row.dateEstimated ? row.reportEndDate : "",
         status: row.status,
         createdAt: new Date().toISOString(),
         source: "ebay",
@@ -1883,6 +1965,9 @@ function openItemDetails(itemId) {
     html += detailBox("Net proceeds", money(netProceeds(sale)));
     html += detailBox("Profit / loss", saleProfit(sale) === null ? "Add purchase cost to calculate" : money(saleProfit(sale)));
     html += detailBox("Sale date", formatDate(sale.saleDate));
+    if (sale.saleDateEstimated) {
+      html += `<p class="field-hint sale-date-estimate">The eBay report gave a date range, not an exact sale date. This sale is dated to the report end: ${escapeHtml(formatDate(sale.saleReportEndDate || sale.saleDate))}.</p>`;
+    }
 
     html += detailBox(
       "Payout",
