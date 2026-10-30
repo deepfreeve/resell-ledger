@@ -67,6 +67,10 @@
     <div class="sidebar-section">
       <p class="sidebar-label">MANAGEMENT</p>
 
+      <button class="sidebar-link" data-page="account" type="button">
+        <span class="nav-icon">◉</span> Your account
+      </button>
+
       <button class="sidebar-link" data-page="inventory" type="button">
         <span class="nav-icon">▦</span> Products
       </button>
@@ -112,6 +116,7 @@
 
       <div class="topbar-right">
 
+        <button class="secondary-button mobile-account-link" type="button" data-page="account">Account</button>
         <button class="secondary-button account-button" id="signOutButton" type="button">Sign out</button>
 
         <div class="header-search">
@@ -377,8 +382,69 @@
 
         </div>
 
+        <section class="panel financial-reports-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">FINANCIAL REPORTING</p>
+              <h3>Monthly performance</h3>
+            </div>
+            <div class="report-actions">
+              <button class="secondary-button" id="exportCsvButton" type="button">Export sales CSV</button>
+              <button class="secondary-button" id="backupButton" type="button">Download backup</button>
+              <button class="secondary-button" id="restoreButton" type="button">Restore backup</button>
+              <input id="restoreFile" type="file" accept="application/json,.json" hidden>
+            </div>
+          </div>
+          <p class="field-hint">Monthly revenue, costs, net proceeds, and realized profit. Imported sales with unknown purchase cost are excluded from profit until you add the cost.</p>
+          <div class="report-table-wrap" id="monthlyReport"></div>
+          <h4 class="report-subheading">Profit by category</h4>
+          <div class="report-table-wrap" id="categoryProfitReport"></div>
+          <p class="form-message" id="backupMessage" role="status" aria-live="polite"></p>
+        </section>
+
       </section>
 
+      <!-- ACCOUNT -->
+      <section class="page" id="page-account">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">MANAGEMENT</p>
+            <h1>Your account</h1>
+            <p class="page-description">Account details and sales imports.</p>
+          </div>
+        </div>
+
+        <section class="panel account-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SIGNED IN</p>
+              <h3 id="accountEmail">Your CACHE account</h3>
+            </div>
+            <button class="secondary-button" id="accountSignOutButton" type="button">Sign out</button>
+          </div>
+          <p class="page-description">Your inventory and sales are saved to your private CACHE account.</p>
+        </section>
+
+        <section class="panel ebay-import-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SALES HISTORY</p>
+              <h3>Import eBay sales CSV</h3>
+            </div>
+          </div>
+          <p class="field-hint">Choose an eBay orders or sales CSV and review rows before importing. We match by SKU or item title, skip duplicates, and ignore buyer details. Unmatched sales are added with purchase cost marked unknown; add the cost later to include them in profit totals.</p>
+          <div class="form-group">
+            <label for="ebayCsvFile">eBay CSV file</label>
+            <input id="ebayCsvFile" type="file" accept=".csv,text/csv">
+          </div>
+          <div id="ebayImportSummary" class="form-message" role="status" aria-live="polite"></div>
+          <div id="ebayPreview" class="report-table-wrap"></div>
+          <div class="detail-actions">
+            <button class="primary-button" id="importEbayButton" type="button" disabled>Import selected sales</button>
+            <button class="secondary-button" id="cancelEbayImportButton" type="button" hidden>Clear preview</button>
+          </div>
+        </section>
+      </section>
 
       <!-- INVENTORY -->
       <section class="page" id="page-inventory">
@@ -441,6 +507,11 @@
               placeholder="Enter product name"
               required
             >
+          </div>
+
+          <div class="form-group">
+            <label for="itemSku">SKU / eBay custom label</label>
+            <input id="itemSku" name="itemSku" type="text" placeholder="Optional; helps match eBay sales">
           </div>
 
           <div class="form-row">
@@ -543,9 +614,12 @@
           </div>
 
           <div class="form-group">
-            <label for="itemPhoto">Product photo</label>
+            <label for="itemPhoto">Browse or upload a photo</label>
             <input id="itemPhoto" name="itemPhoto" type="file" accept="image/*">
-            <p class="field-hint">Choose an image smaller than 2 MB.</p>
+            <button class="secondary-button photo-search-button" id="searchItemPhotoButton" type="button">Search for a photo online</button>
+            <label for="itemCameraPhoto" class="photo-camera-label">Take a photo</label>
+            <input id="itemCameraPhoto" name="itemCameraPhoto" type="file" accept="image/*" capture="environment">
+            <p class="field-hint">Search opens image results in a new browser tab. Download the image you want, then choose it above. You can also browse your device or use the camera. Images up to 12 MB are resized and compressed.</p>
           </div>
 
           <p id="formMessage" class="form-message" role="status"></p>
@@ -673,6 +747,7 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <script src="app.js"></script>

@@ -18,4 +18,6 @@ Keep `supabase-config.js` beside `index.html`, `app.js`, and `style.css` when pu
 
 After the first successful sign-in, the app imports the existing `resellledger_data_v1` browser record into that account if the account has no cloud record yet. Future changes are saved to Supabase and a per-account local cache. Use the same login on each device to see the same cloud data.
 
-Photos remain embedded in the saved item data, matching the current app behavior. Large inventories with many photos can make sync slower; a dedicated private Storage bucket is a good next improvement.
+The connected CACHE project has the private `cache-item-photos` bucket and its migration recorded. For a different project, run `supabase/migrations/20261030032412_private_item_photos.sql` after the base schema. It accepts JPEGs up to 4 MB, and its policies only allow signed-in users to access objects under their own user ID folder. New photos are resized and uploaded there; embedded photos are migrated the next time their owner signs in. The app stores object paths in the account record and uses short-lived signed URLs to display them.
+
+The dashboard includes monthly and category profit reports, CSV sales export, and JSON backup and restore. Backups embed photo data so they can be restored into another CACHE account. Sale screenshot OCR runs in the browser; screenshot contents are not sent to a recognition service. Review all OCR-filled fields before saving.

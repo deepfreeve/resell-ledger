@@ -6,6 +6,7 @@
 
 const STORAGE_KEY = "resellledger_data_v1";
 const CLOUD_TABLE = "cache_user_data";
+const PHOTO_BUCKET = "cache-item-photos";
 const supabaseClient = window.supabase.createClient(
   window.CACHE_SUPABASE_URL,
   window.CACHE_SUPABASE_PUBLISHABLE_KEY
@@ -49,6 +50,8 @@ const POKEMON_CONDITIONS = [
 const $ = (selector) => document.querySelector(selector);
 
 let salesChart = null;
+const signedPhotoUrls = new Map();
+let ebayImportRows = [];
 
 /* =========================================
    DATA STORAGE
@@ -197,9 +200,9 @@ function netProceeds(sale) {
 function saleProfit(sale) {
   const item = data.items.find((entry) => entry.id === sale.itemId);
 
-  return item
-    ? netProceeds(sale) - Number(item.purchaseCost || 0)
-    : 0;
+  if (!item) return 0;
+  if (item.purchaseCostUnknown) return null;
+  return netProceeds(sale) - Number(item.purchaseCost || 0);
 }
 
 function pendingTotal() {
@@ -210,8 +213,25 @@ function pendingTotal() {
 
 function lifetimeProfit() {
   return data.sales
-    .filter((sale) => sale.status === "paid")
+    .filter((sale) => sale.status === "paid" && saleProfit(sale) !== null)
     .reduce((total, sale) => total + saleProfit(sale), 0);
+}
+
+function allocatePaidSaleFunds(sale, item) {
+  if (!item || item.purchaseCostUnknown) return;
+  const net = netProceeds(sale);
+  const cost = Number(item.purchaseCost) || 0;
+  const recovered = Math.max(0, Math.min(net, cost));
+  const profit = Math.max(0, net - cost);
+  const reinvestment = Math.round(profit * 50) / 100;
+  const personal = profit - reinvestment;
+  data.funds.capital += recovered;
+  data.funds.reinvestment += reinvestment;
+  data.funds.personal += personal;
+  sale.capitalRecovered = recovered;
+  sale.reinvestmentAdded = reinvestment;
+  sale.personalAdded = personal;
+  sale.fundsAllocated = true;
 }
 
 /* =========================================
@@ -394,6 +414,447 @@ function updateDashboard() {
   renderSalesChart();
   renderCategoryBreakdown();
   renderRecentActivity();
+  renderFinancialReports();
+}
+
+function renderFinancialReports() {
+  const byMonth = new Map();
+  const byCategory = new Map();
+  data.sales.forEach((sale) => {
+    const month = String(sale.saleDate || sale.createdAt || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const item = data.items.find((entry) => entry.id === sale.itemId);
+    const row = byMonth.get(month) || { revenue: 0, costs: 0, net: 0, inventory: 0, profit: 0, unknownCosts: 0 };
+    const net = netProceeds(sale);
+    const inventory = Number(item?.purchaseCost || 0);
+    row.revenue += Number(sale.salePrice || 0);
+    row.costs += Number(sale.platformFees || 0) + Number(sale.shipping || 0) + Number(sale.otherCosts || 0);
+    row.net += net;
+    const profit = sale.status === "paid" ? saleProfit(sale) : null;
+    if (profit !== null) {
+      row.inventory += inventory;
+      row.profit += profit;
+    } else if (sale.status === "paid") {
+      row.unknownCosts += 1;
+    }
+    byMonth.set(month, row);
+
+    if (sale.status === "paid") {
+      const category = item ? categoryName(item) : "Other";
+      const categoryRow = byCategory.get(category) || { sales: 0, profit: 0, count: 0, unknownCosts: 0 };
+      categoryRow.sales += Number(sale.salePrice || 0);
+      categoryRow.count += 1;
+      if (profit === null) categoryRow.unknownCosts += 1;
+      else categoryRow.profit += profit;
+      byCategory.set(category, categoryRow);
+    }
+  });
+
+  const months = [...byMonth.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  $("#monthlyReport").innerHTML = months.length ? `
+    <table class="report-table"><thead><tr><th>Month</th><th>Sales</th><th>Fees & costs</th><th>Net proceeds</th><th>Inventory cost</th><th>Realized profit</th><th>Cost unknown</th></tr></thead>
+    <tbody>${months.map(([month, row]) => `<tr><th>${escapeHtml(new Date(`${month}-01T00:00:00`).toLocaleDateString("en-US", { month: "short", year: "numeric" }))}</th><td>${money(row.revenue)}</td><td>${money(row.costs)}</td><td>${money(row.net)}</td><td>${money(row.inventory)}</td><td>${money(row.profit)}</td><td>${row.unknownCosts}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted-text">Record a sale to see monthly performance.</p>';
+
+  const categories = [...byCategory.entries()].sort((a, b) => b[1].profit - a[1].profit);
+  $("#categoryProfitReport").innerHTML = categories.length ? `
+    <table class="report-table"><thead><tr><th>Category</th><th>Paid sales</th><th>Gross revenue</th><th>Realized profit</th><th>Cost unknown</th></tr></thead>
+    <tbody>${categories.map(([category, row]) => `<tr><th>${escapeHtml(category)}</th><td>${row.count}</td><td>${money(row.sales)}</td><td>${money(row.profit)}</td><td>${row.unknownCosts}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="muted-text">Paid sales by category will appear here.</p>';
+}
+
+function downloadFile(filename, contents, type) {
+  const url = URL.createObjectURL(new Blob([contents], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function exportSalesCsv() {
+  const headers = ["Item", "Category", "Sale date", "Status", "Sale price", "Platform fees", "Shipping", "Other costs", "Net proceeds", "Purchase cost", "Realized profit"];
+  const rows = data.sales.map((sale) => {
+    const item = data.items.find((entry) => entry.id === sale.itemId);
+    return [item?.name || "", item ? categoryName(item) : "Other", sale.saleDate, sale.status,
+      sale.salePrice, sale.platformFees, sale.shipping, sale.otherCosts, netProceeds(sale),
+      item?.purchaseCost || 0, sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
+  });
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  downloadFile(`cache-sales-${todayString()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read a backed-up photo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function createBackup() {
+  const backupData = JSON.parse(JSON.stringify(data));
+  for (const item of backupData.items) {
+    if (!item.photo || item.photo.startsWith("data:")) continue;
+    const { data: photo, error } = await supabaseClient.storage.from(PHOTO_BUCKET).download(item.photo);
+    if (error) throw error;
+    item.photo = await blobToDataUrl(photo);
+  }
+  downloadFile(`cache-backup-${todayString()}.json`, JSON.stringify({ app: "CACHE", version: 1, exportedAt: new Date().toISOString(), data: backupData }, null, 2), "application/json");
+}
+
+function isValidBackup(value) {
+  return value && typeof value === "object" && value.data &&
+    Array.isArray(value.data.items) && Array.isArray(value.data.sales) &&
+    (value.version === 1 || value.version === undefined);
+}
+
+async function restoreBackup(event) {
+  const file = event.currentTarget.files[0];
+  event.currentTarget.value = "";
+  if (!file) return;
+  const message = $("#backupMessage");
+  try {
+    const backup = JSON.parse(await file.text());
+    if (!isValidBackup(backup)) throw new Error("This file is not a CACHE backup.");
+    if (!confirm("Replace all current inventory, sales, categories, and funds with this backup? This cannot be undone.")) return;
+
+    const restored = normalizeData(backup.data);
+    for (const item of restored.items) {
+      if (typeof item.photo !== "string" || !item.photo.startsWith("data:image/")) continue;
+      item.photo = await uploadEmbeddedPhoto(item.photo, item.id);
+    }
+    data = restored;
+    Object.keys(CATEGORY_NAMES).filter((id) => id.startsWith("custom_")).forEach((id) => delete CATEGORY_NAMES[id]);
+    applyCustomCategoryNames();
+    updateCategoryOptions();
+    if (!saveData()) throw new Error("Could not save the restored data.");
+    renderAll();
+    message.textContent = "Backup restored. Cloud sync is in progress.";
+    message.classList.remove("error");
+  } catch (error) {
+    console.error("Could not restore backup:", error);
+    message.textContent = error.message || "Could not restore this backup.";
+    message.classList.add("error");
+  }
+}
+
+function setupDataTools() {
+  $("#exportCsvButton").addEventListener("click", exportSalesCsv);
+  $("#backupButton").addEventListener("click", async () => {
+    const message = $("#backupMessage");
+    message.textContent = "Preparing backup…";
+    try {
+      await createBackup();
+      message.textContent = "Backup downloaded.";
+      message.classList.remove("error");
+    } catch (error) {
+      console.error("Could not create backup:", error);
+      message.textContent = "Could not download all backup data. Check your connection and try again.";
+      message.classList.add("error");
+    }
+  });
+  $("#restoreButton").addEventListener("click", () => $("#restoreFile").click());
+  $("#restoreFile").addEventListener("change", restoreBackup);
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(cell);
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => value.trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeCsvHeader(value) {
+  return String(value || "").replace(/^\uFEFF/, "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function findCsvColumn(headers, aliases) {
+  return headers.findIndex((header) => {
+    const normalized = normalizeCsvHeader(header);
+    return aliases.some((alias) => normalized === alias || (alias !== "item" && normalized.startsWith(alias)));
+  });
+}
+
+function parseCsvMoney(value) {
+  const text = String(value || "").trim();
+  if (!text || /^[-–—]+$/.test(text)) return null;
+  const parenthesized = /^\(.*\)$/.test(text);
+  const number = Number(text.replace(/[,$\s()]/g, "").replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(number)) return null;
+  return parenthesized ? -Math.abs(number) : number;
+}
+
+function parseCsvDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const validatedDate = (year, month, day) => {
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) return "";
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  };
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return validatedDate(iso[1], iso[2], iso[3]);
+  const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (us) {
+    const year = us[3].length === 2 ? Number(us[3]) + (Number(us[3]) < 70 ? 2000 : 1900) : Number(us[3]);
+    return validatedDate(year, us[1], us[2]);
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function ebayRowKey(parts) {
+  const source = parts.map((part) => String(part || "").trim().toLowerCase()).join("|");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `ebay-${(hash >>> 0).toString(16)}`;
+}
+
+function parseEbayCsv(text) {
+  const rows = parseCsv(text);
+  const headerIndex = rows.findIndex((row) => {
+    const headers = row.map(normalizeCsvHeader);
+    const hasTitle = headers.some((value) => ["itemtitle", "title", "item", "listingtitle"].some((alias) => value === alias || (alias !== "item" && value.startsWith(alias))));
+    const hasPrice = headers.some((value) => ["soldfor", "saleprice", "itemprice", "price", "itemsaleprice", "itemsoldfor", "saleamount", "grossamount"].some((alias) => value === alias || value.startsWith(alias)));
+    return hasTitle && hasPrice;
+  });
+  if (headerIndex < 0) throw new Error("I couldn't find the item title and sale price columns. Choose an eBay orders or sales CSV.");
+
+  const headers = rows[headerIndex];
+  const titleColumn = findCsvColumn(headers, ["itemtitle", "listingtitle", "title", "item"]);
+  const skuColumn = findCsvColumn(headers, ["customlabelsku", "customlabel", "sku"]);
+  const priceColumn = findCsvColumn(headers, ["soldfor", "saleprice", "itemsoldfor", "itemsaleprice", "itemprice", "itemsaleamount", "saleamount", "grossamount", "price"]);
+  const dateColumn = findCsvColumn(headers, ["ordercreationdate", "dateofsale", "saledate", "datesold", "orderdate", "creationdate", "date"]);
+  const statusColumn = findCsvColumn(headers, ["paymentstatus", "orderstatus", "status"]);
+  const idColumns = ["salesrecordnumber", "ordernumber", "orderid", "transactionid", "itemnumber"]
+    .map((alias) => findCsvColumn(headers, [alias])).filter((index) => index >= 0);
+  const feeColumns = headers.map((header, index) => ({ name: normalizeCsvHeader(header), index }))
+    .filter(({ name }) => name.includes("fee") && !name.includes("refund") && !name.includes("tax"))
+    .map(({ index }) => index);
+  const inventoryBySku = data.items.filter((item) => item.sku).reduce((map, item) => {
+    const key = item.sku.trim().toLowerCase();
+    map.set(key, [...(map.get(key) || []), item]);
+    return map;
+  }, new Map());
+  const titleKey = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const seenKeys = new Set();
+  const reservedItemIds = new Set();
+  const importedKeys = new Set(data.sales.filter((sale) => sale.source === "ebay").map((sale) => sale.externalId));
+
+  return rows.slice(headerIndex + 1).map((cells, offset) => {
+    const value = (column) => column < 0 ? "" : (cells[column] || "").trim();
+    const title = value(titleColumn);
+    const price = parseCsvMoney(value(priceColumn));
+    const date = parseCsvDate(value(dateColumn));
+    const sku = value(skuColumn);
+    if (!title) return null;
+    const feeTotal = feeColumns.reduce((total, column) => total + Math.abs(parseCsvMoney(value(column)) || 0), 0);
+    const statusText = value(statusColumn).toLowerCase();
+    const identity = idColumns.map(value).filter(Boolean);
+    const importKey = ebayRowKey([...identity, sku, title, date, price, identity.length ? "" : offset]);
+    const candidates = sku ? (inventoryBySku.get(sku.toLowerCase()) || []) : [];
+    const namedCandidates = candidates.length ? candidates : data.items.filter((item) => titleKey(item.name) === titleKey(title));
+    const availableItem = namedCandidates.find((item) => !getSaleForItem(item.id) && !reservedItemIds.has(item.id));
+    if (availableItem) reservedItemIds.add(availableItem.id);
+    const priorSale = namedCandidates.length > 0 && namedCandidates.every((item) => getSaleForItem(item.id));
+    const repeatedInFile = seenKeys.has(importKey);
+    seenKeys.add(importKey);
+
+    let state = "ready";
+    if (importedKeys.has(importKey) || repeatedInFile) state = "duplicate";
+    else if (/cancel|refund|void/.test(statusText)) state = "cancelled";
+    else if (!date || price === null) state = "invalid";
+    else if (priorSale) state = "already-sold";
+
+    return {
+      rowNumber: headerIndex + offset + 2,
+      title,
+      sku,
+      date,
+      price,
+      fees: feeTotal,
+      status: /unpaid|awaitingpayment|paymentpending/.test(normalizeCsvHeader(statusText)) ? "pending" : "paid",
+      importKey,
+      matchedItemId: availableItem?.id || "",
+      state,
+      include: state === "ready"
+    };
+  }).filter(Boolean);
+}
+
+function renderEbayPreview() {
+  const rows = ebayImportRows;
+  const stateLabel = (row) => ({
+    ready: row.matchedItemId ? `Match: ${data.items.find((item) => item.id === row.matchedItemId)?.name || "inventory"}` : "Add sold item; cost unknown",
+    duplicate: "Already imported",
+    cancelled: "Cancelled/refunded; skipped",
+    invalid: "Missing sale price or date",
+    "already-sold": "Matching item already has a sale",
+    imported: "Imported"
+  })[row.state] || "Skipped";
+  const selectable = rows.filter((row) => row.state === "ready");
+  const selected = selectable.filter((row) => row.include).length;
+  $("#ebayPreview").innerHTML = rows.length ? `
+    <table class="report-table ebay-preview-table">
+      <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Fees</th><th>Import action</th></tr></thead>
+      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}</td><td>${row.price === null ? "—" : money(row.price)}</td><td>${money(row.fees)}</td><td>${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
+    </table>` : "";
+  const skipped = rows.length - selectable.length;
+  $("#ebayImportSummary").textContent = rows.length
+    ? `${rows.length} sale rows found · ${selected} selected · ${skipped} skipped or already imported. Buyer names, addresses, and emails are ignored.`
+    : "";
+  $("#importEbayButton").disabled = selected === 0;
+  $("#cancelEbayImportButton").hidden = rows.length === 0;
+}
+
+async function previewEbayCsv(event) {
+  const file = event.currentTarget.files[0];
+  if (!file) return;
+  try {
+    ebayImportRows = parseEbayCsv(await file.text());
+    $("#ebayImportSummary").classList.remove("error");
+    renderEbayPreview();
+  } catch (error) {
+    ebayImportRows = [];
+    renderEbayPreview();
+    $("#ebayImportSummary").textContent = error.message || "Could not read this CSV.";
+    $("#ebayImportSummary").classList.add("error");
+  }
+}
+
+function updateEbaySelection() {
+  $("#ebayPreview").querySelectorAll("[data-ebay-row]").forEach((checkbox) => {
+    ebayImportRows[Number(checkbox.dataset.ebayRow)].include = checkbox.checked;
+  });
+  renderEbayPreview();
+}
+
+function importSelectedEbaySales() {
+  const selected = ebayImportRows.filter((row) => row.state === "ready" && row.include);
+  if (!selected.length) return;
+  const previousData = JSON.parse(JSON.stringify(data));
+  try {
+    for (const row of selected) {
+      let item = row.matchedItemId
+        ? data.items.find((entry) => entry.id === row.matchedItemId)
+        : null;
+      if (item && getSaleForItem(item.id)) {
+        row.state = "already-sold";
+        row.include = false;
+        continue;
+      }
+      if (!item) {
+        item = {
+          id: makeId(),
+          name: row.title,
+          sku: row.sku,
+          productCategory: "other",
+          listedPrice: row.price,
+          purchaseCost: 0,
+          purchaseCostUnknown: true,
+          purchaseDate: row.date,
+          itemCondition: "Not specified",
+          photo: "",
+          notes: "Imported from eBay. Add the purchase cost to calculate profit accurately.",
+          createdAt: new Date().toISOString()
+        };
+        data.items.push(item);
+      }
+      const sale = {
+        id: makeId(),
+        itemId: item.id,
+        salePrice: row.price,
+        platformFees: row.fees,
+        shipping: 0,
+        otherCosts: 0,
+        saleDate: row.date,
+        status: row.status,
+        createdAt: new Date().toISOString(),
+        source: "ebay",
+        externalId: row.importKey,
+        fundsAllocated: false
+      };
+      if (sale.status === "paid") {
+        sale.paidDate = row.date;
+        sale.paidAt = new Date(`${row.date}T12:00:00`).toISOString();
+        allocatePaidSaleFunds(sale, item);
+      }
+      data.sales.push(sale);
+      row.state = "imported";
+      row.include = false;
+    }
+    if (!saveData()) throw new Error("Could not save the imported sales.");
+    renderAll();
+    renderEbayPreview();
+  } catch (error) {
+    data = normalizeData(previousData);
+    selected.forEach((row) => {
+      if (row.state === "imported") {
+        row.state = "ready";
+        row.include = true;
+      }
+    });
+    console.error("eBay import failed:", error);
+    $("#ebayImportSummary").textContent = error.message || "Could not import these sales.";
+    $("#ebayImportSummary").classList.add("error");
+    renderAll();
+  }
+}
+
+function setupEbayImport() {
+  $("#ebayCsvFile").addEventListener("change", previewEbayCsv);
+  $("#ebayPreview").addEventListener("change", (event) => {
+    if (event.target.matches("[data-ebay-row]")) updateEbaySelection();
+    if (event.target.matches("[data-ebay-select-all]")) {
+      ebayImportRows.forEach((row) => {
+        if (row.state === "ready") row.include = event.target.checked;
+      });
+      renderEbayPreview();
+    }
+  });
+  $("#importEbayButton").addEventListener("click", importSelectedEbaySales);
+  $("#cancelEbayImportButton").addEventListener("click", () => {
+    ebayImportRows = [];
+    $("#ebayCsvFile").value = "";
+    renderEbayPreview();
+  });
 }
 
 /* =========================================
@@ -761,9 +1222,10 @@ function itemIcon(item) {
 
 function thumbnail(item) {
   if (item.photo) {
+    const embeddedPhoto = item.photo.startsWith("data:");
     return `
       <div class="item-thumbnail">
-        <img src="${escapeHtml(item.photo)}"
+        <img ${embeddedPhoto ? `src="${escapeHtml(item.photo)}"` : `data-photo-path="${escapeHtml(item.photo)}"`}
           alt="" loading="lazy">
       </div>`;
   }
@@ -959,7 +1421,7 @@ function renderSold() {
           </div>
 
           <div class="item-price">
-            <strong>${money(saleProfit(sale))}</strong>
+            <strong>${saleProfit(sale) === null ? "Not recorded" : money(saleProfit(sale))}</strong>
             <span>Profit / loss</span>
 
             <button class="text-button" type="button"
@@ -984,6 +1446,7 @@ function renderAll() {
   renderInventory();
   renderPending();
   renderSold();
+  hydratePhotos(document);
 }
 
 /* =========================================
@@ -991,7 +1454,7 @@ function renderAll() {
 ========================================= */
 
 function showPage(pageName) {
-  if (!["home", "inventory", "add", "pending", "sold"].includes(pageName)) {
+  if (!["home", "inventory", "add", "pending", "sold", "account"].includes(pageName)) {
     return;
   }
 
@@ -1002,7 +1465,7 @@ function showPage(pageName) {
     );
   });
 
-  document.querySelectorAll(".nav-button, .sidebar-link").forEach((button) => {
+  document.querySelectorAll(".nav-button, .sidebar-link, .mobile-account-link").forEach((button) => {
     button.classList.toggle(
       "active",
       button.dataset.page === pageName
@@ -1014,7 +1477,8 @@ function showPage(pageName) {
     inventory: "Inventory",
     add: "Add item",
     pending: "Pending payouts",
-    sold: "Completed sales"
+    sold: "Completed sales",
+    account: "Your account"
   };
 
   const title = $("#currentPageTitle");
@@ -1037,17 +1501,105 @@ function readPhoto(file) {
       return reject(new Error("Please choose an image file."));
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      return reject(new Error("Please choose an image smaller than 2 MB."));
+    if (file.size > 12 * 1024 * 1024) {
+      return reject(new Error("Please choose an image smaller than 12 MB."));
     }
 
-    const reader = new FileReader();
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
 
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Could not read the image."));
+    image.onload = () => {
+      URL.revokeObjectURL(imageUrl);
 
-    reader.readAsDataURL(file);
+      const maxDimension = 1280;
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+
+      const context = canvas.getContext("2d");
+      if (!context) return reject(new Error("Could not process the image."));
+
+      // A white fill keeps transparent PNG/WebP images readable after JPEG conversion.
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error("Could not process the image."));
+        resolve(blob);
+      }, "image/jpeg", 0.82);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      reject(new Error("Could not read the image."));
+    };
+
+    image.src = imageUrl;
   });
+}
+
+async function uploadPhotoBlob(blob, itemId) {
+  const userId = supabaseUser?.id;
+  if (!userId) throw new Error("Sign in before uploading a photo.");
+  const path = `${userId}/${itemId}/${makeId()}.jpg`;
+  const { error } = await supabaseClient.storage.from(PHOTO_BUCKET).upload(path, blob, {
+    contentType: "image/jpeg",
+    upsert: false
+  });
+  if (error) throw error;
+  return path;
+}
+
+async function migrateEmbeddedPhotos() {
+  let migrated = 0;
+  for (const item of data.items) {
+    if (typeof item.photo !== "string" || !item.photo.startsWith("data:image/")) continue;
+    item.photo = await uploadEmbeddedPhoto(item.photo, item.id);
+    migrated += 1;
+  }
+  if (migrated) {
+    if (!saveData()) throw new Error("Could not save migrated photo references.");
+    renderAll();
+  }
+  return migrated;
+}
+
+async function uploadEmbeddedPhoto(dataUrl, itemId) {
+  const source = await (await fetch(dataUrl)).blob();
+  const file = new File([source], `item-${itemId}`, { type: source.type || "image/jpeg" });
+  return uploadPhotoBlob(await readPhoto(file), itemId);
+}
+
+async function hydratePhotos(container) {
+  const images = [...container.querySelectorAll("img[data-photo-path]")];
+  await Promise.all(images.map(async (image) => {
+    const path = image.dataset.photoPath;
+    if (!signedPhotoUrls.has(path)) {
+      signedPhotoUrls.set(path, { url: "", expiresAt: 0, pending: null });
+    }
+    const cached = signedPhotoUrls.get(path);
+    if (!cached.url || cached.expiresAt < Date.now() + 60000) {
+      if (!cached.pending) {
+        cached.pending = supabaseClient.storage.from(PHOTO_BUCKET)
+          .createSignedUrl(path, 3600)
+          .then(({ data: result, error }) => {
+            if (error) throw error;
+            cached.url = result.signedUrl;
+            cached.expiresAt = Date.now() + 3500000;
+            return cached.url;
+          })
+          .catch((error) => {
+            console.warn("Could not load item photo:", error);
+            return "";
+          })
+          .finally(() => { cached.pending = null; });
+      }
+      await cached.pending;
+    }
+    if (cached.url && image.isConnected && image.dataset.photoPath === path) image.src = cached.url;
+  }));
 }
 
 /* =========================================
@@ -1063,6 +1615,7 @@ async function saveItemForm(event) {
   const existing = editingId
     ? data.items.find((item) => item.id === editingId)
     : null;
+  const itemId = existing?.id || makeId();
 
   const message = $("#formMessage");
 
@@ -1075,6 +1628,7 @@ async function saveItemForm(event) {
   const purchaseDate = $("#purchaseDate").value;
 
   if (!name || !purchaseDate ||
+      (existing?.purchaseCostUnknown && !$("#purchaseCost").value.trim()) ||
       !Number.isFinite(listedPrice) || listedPrice < 0 ||
       !Number.isFinite(purchaseCost) || purchaseCost < 0) {
     message.textContent =
@@ -1088,10 +1642,13 @@ async function saveItemForm(event) {
   button.disabled = true;
 
   try {
-    const selectedFile = $("#itemPhoto").files[0];
+    const selectedFile = $("#itemPhoto").files[0] || $("#itemCameraPhoto").files[0];
 
-    const newPhoto = selectedFile
+    const newPhotoBlob = selectedFile
       ? await readPhoto(selectedFile)
+      : null;
+    const newPhoto = newPhotoBlob
+      ? await uploadPhotoBlob(newPhotoBlob, itemId)
       : null;
 
     const category = $("#productCategory").value;
@@ -1104,11 +1661,13 @@ async function saveItemForm(event) {
 
     const item = {
       ...(existing || {}),
-      id: existing ? existing.id : makeId(),
+      id: itemId,
       name,
+      sku: $("#itemSku").value.trim(),
       productCategory: category,
       listedPrice: Math.round(listedPrice * 100) / 100,
       purchaseCost: Math.round(purchaseCost * 100) / 100,
+      purchaseCostUnknown: false,
       purchaseDate,
       itemCondition: $("#itemCondition").value,
 
@@ -1129,10 +1688,20 @@ async function saveItemForm(event) {
       (entry) => entry.id === item.id
     );
 
+    const saleToAllocate = existing?.purchaseCostUnknown
+      ? getSaleForItem(item.id)
+      : null;
+    const oldFunds = { ...data.funds };
+    const oldSale = saleToAllocate ? { ...saleToAllocate } : null;
+
     if (index >= 0) {
       data.items[index] = item;
     } else {
       data.items.push(item);
+    }
+
+    if (saleToAllocate?.status === "paid" && saleToAllocate.fundsAllocated === false) {
+      allocatePaidSaleFunds(saleToAllocate, item);
     }
 
     if (!saveData()) {
@@ -1143,6 +1712,8 @@ async function saveItemForm(event) {
           (entry) => entry.id !== item.id
         );
       }
+      data.funds = oldFunds;
+      if (saleToAllocate && oldSale) Object.assign(saleToAllocate, oldSale);
 
       return;
     }
@@ -1193,7 +1764,9 @@ function startEditingItem(itemId) {
   $("#itemName").value = item.name;
   $("#listedPrice").value = item.listedPrice ?? "";
   $("#purchaseCost").value = item.purchaseCost;
+  if (item.purchaseCostUnknown) $("#purchaseCost").value = "";
   $("#purchaseDate").value = item.purchaseDate;
+  $("#itemSku").value = item.sku || "";
 
   $("#itemCondition").value =
     item.itemCondition || "Not specified";
@@ -1204,6 +1777,7 @@ function startEditingItem(itemId) {
   $("#cardGrade").value = item.cardGrade || "";
   $("#certNumber").value = item.certNumber || "";
   $("#itemPhoto").value = "";
+  $("#itemCameraPhoto").value = "";
 
   setGradingFieldsVisibility();
 
@@ -1246,9 +1820,10 @@ function openItemDetails(itemId) {
   let html = '<div class="detail-grid">';
 
   html += detailBox("Listed price", money(item.listedPrice || 0));
-  html += detailBox("Purchase cost", money(item.purchaseCost));
+  html += detailBox("Purchase cost", item.purchaseCostUnknown ? "Not recorded yet" : money(item.purchaseCost));
   html += detailBox("Purchase date", formatDate(item.purchaseDate));
   html += detailBox("Category", categoryName(item));
+  if (item.sku) html += detailBox("SKU", item.sku);
 
   html += detailBox(
     "Condition",
@@ -1284,9 +1859,10 @@ function openItemDetails(itemId) {
   html += "</div>";
 
   if (item.photo) {
+    const embeddedPhoto = item.photo.startsWith("data:");
     html += `
       <img class="details-photo"
-        src="${escapeHtml(item.photo)}"
+        ${embeddedPhoto ? `src="${escapeHtml(item.photo)}"` : `data-photo-path="${escapeHtml(item.photo)}"`}
         alt="${escapeHtml(item.name)}">`;
   }
 
@@ -1305,7 +1881,7 @@ function openItemDetails(itemId) {
     html += detailBox("Shipping", money(sale.shipping));
     html += detailBox("Other sale costs", money(sale.otherCosts));
     html += detailBox("Net proceeds", money(netProceeds(sale)));
-    html += detailBox("Profit / loss", money(saleProfit(sale)));
+    html += detailBox("Profit / loss", saleProfit(sale) === null ? "Add purchase cost to calculate" : money(saleProfit(sale)));
     html += detailBox("Sale date", formatDate(sale.saleDate));
 
     html += detailBox(
@@ -1314,6 +1890,14 @@ function openItemDetails(itemId) {
     );
 
     html += "</div>";
+
+    html += `
+      <div class="detail-actions">
+        <button class="secondary-button" type="button"
+          data-edit-item="${escapeHtml(item.id)}">
+          ${item.purchaseCostUnknown ? "Add purchase cost" : "Edit item details"}
+        </button>
+      </div>`;
 
     if (sale.status === "pending") {
       html += `
@@ -1361,6 +1945,7 @@ function openItemDetails(itemId) {
 
   $("#detailsContent").innerHTML = html;
   $("#itemDetails").classList.remove("hidden");
+  hydratePhotos($("#detailsContent"));
 }
 
 function closeDetails() {
@@ -1417,6 +2002,12 @@ function showSaleForm(itemId) {
             min="0" step="0.01" value="0" required>
         </label>
 
+        <label class="field full-width">
+          Sale screenshot (optional)
+          <input name="saleScreenshot" type="file" accept="image/*">
+          <span class="field-hint">Text is read on this device. Review recognized details before saving.</span>
+        </label>
+
       </div>
 
       <div class="sale-summary" id="saleEstimate">
@@ -1460,9 +2051,81 @@ function showSaleForm(itemId) {
 
   form.addEventListener("input", updateEstimate);
 
+  form.querySelector('[name="saleScreenshot"]').addEventListener("change", readSaleScreenshot);
+
   form.addEventListener("submit", (event) => {
     saveSale(event, itemId);
   });
+}
+
+function parseSaleScreenshotText(text) {
+  const parsed = {};
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const moneyPattern = /\$\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)/;
+  const findAmount = (labels) => {
+    const line = lines.find((entry) => labels.test(entry));
+    const match = line?.match(moneyPattern);
+    return match ? Number(match[1].replaceAll(",", "")) : null;
+  };
+
+  const salePrice = findAmount(/sold for|sale price|item price|order total|\bsold\b/i);
+  if (salePrice !== null) parsed.salePrice = salePrice;
+
+  const fees = findAmount(/selling fee|platform fee|\bfees?\b|commission/i);
+  if (fees !== null) parsed.platformFees = fees;
+
+  const shipping = findAmount(/shipping|postage/i);
+  if (shipping !== null) parsed.shipping = shipping;
+
+  const dateMatch = text.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b|\b(\d{1,2})[-/](\d{1,2})[-/](\d{4})\b/);
+  if (dateMatch) {
+    const [, yearA, monthA, dayA, monthB, dayB, yearB] = dateMatch;
+    const year = yearA || yearB;
+    const month = (monthA || monthB).padStart(2, "0");
+    const day = (dayA || dayB).padStart(2, "0");
+    parsed.saleDate = `${year}-${month}-${day}`;
+  }
+
+  return parsed;
+}
+
+async function readSaleScreenshot(event) {
+  const file = event.currentTarget.files[0];
+  const message = $("#saleMessage");
+  if (!file) return;
+  if (!file.type.startsWith("image/") || file.size > 12 * 1024 * 1024) {
+    message.textContent = "Choose an image smaller than 12 MB.";
+    message.classList.add("error");
+    return;
+  }
+  if (!window.Tesseract) {
+    message.textContent = "Screenshot reading could not load. Enter the sale details manually.";
+    message.classList.add("error");
+    return;
+  }
+
+  message.classList.remove("error");
+  message.textContent = "Reading screenshot on this device…";
+  let worker;
+  try {
+    worker = await window.Tesseract.createWorker("eng");
+    const { data: result } = await worker.recognize(file);
+    const parsed = parseSaleScreenshotText(result.text || "");
+    const form = $("#saleForm");
+    ["salePrice", "platformFees", "shipping", "saleDate"].forEach((name) => {
+      if (parsed[name] !== undefined) form.elements.namedItem(name).value = parsed[name];
+    });
+    form.dispatchEvent(new Event("input", { bubbles: true }));
+    message.textContent = Object.keys(parsed).length
+      ? "Recognized details were filled in. Review them before saving."
+      : "No sale details were recognized. Enter them manually.";
+  } catch (error) {
+    console.error("Sale screenshot OCR failed:", error);
+    message.textContent = "Could not read this screenshot. Enter the sale details manually.";
+    message.classList.add("error");
+  } finally {
+    await worker?.terminate();
+  }
 }
 
 function saveSale(event, itemId) {
@@ -1533,29 +2196,14 @@ function markSalePaid(saleId) {
 
   if (!item) return;
 
-  const net = netProceeds(sale);
-  const cost = Number(item.purchaseCost) || 0;
-
-  const recovered = Math.max(0, Math.min(net, cost));
-  const profit = Math.max(0, net - cost);
-
-  const reinvestment = Math.round(profit * 50) / 100;
-  const personal = profit - reinvestment;
-
   const oldFunds = { ...data.funds };
   const oldSale = { ...sale };
-
-  data.funds.capital += recovered;
-  data.funds.reinvestment += reinvestment;
-  data.funds.personal += personal;
 
   sale.status = "paid";
   sale.paidDate = todayString();
   sale.paidAt = new Date().toISOString();
-
-  sale.capitalRecovered = recovered;
-  sale.reinvestmentAdded = reinvestment;
-  sale.personalAdded = personal;
+  allocatePaidSaleFunds(sale, item);
+  if (item.purchaseCostUnknown) sale.fundsAllocated = false;
 
   if (!saveData()) {
     data.funds = oldFunds;
@@ -1725,6 +2373,13 @@ $("#quickAddButton").addEventListener("click", () => {
 
 $("#closeDetails").addEventListener("click", closeDetails);
 
+$("#searchItemPhotoButton").addEventListener("click", () => {
+  const query = $("#itemName").value.trim() || "product photo";
+  const searchUrl = new URL("https://www.bing.com/images/search");
+  searchUrl.searchParams.set("q", query);
+  window.open(searchUrl.href, "_blank", "noopener,noreferrer");
+});
+
 $("#itemForm").addEventListener("submit", saveItemForm);
 
 $("#productCategory").addEventListener("change", () => {
@@ -1756,6 +2411,9 @@ $("#categoryFilter").addEventListener(
   "change",
   renderInventory
 );
+
+setupDataTools();
+setupEbayImport();
 
 /* =========================================
    INITIALIZE
@@ -1819,11 +2477,13 @@ async function handleAuthSession(session) {
     supabaseUser = null;
     loadedUserId = null;
     data = createEmptyData();
+    $("#accountEmail").textContent = "Your CACHE account";
     setAuthenticatedView(false);
     return;
   }
 
   supabaseUser = user;
+  $("#accountEmail").textContent = user.email || "Signed in to CACHE";
   setAuthMessage("Loading your inventory…");
   setAuthenticatedView(false);
   if (loadedUserId === user.id) {
@@ -1836,6 +2496,13 @@ async function handleAuthSession(session) {
     loadedUserId = user.id;
     setAuthMessage("");
     setAuthenticatedView(true);
+    migrateEmbeddedPhotos().catch((error) => {
+      console.error("Could not migrate embedded photos:", error);
+      const toast = $("#toast");
+      toast.textContent = "Some older photos could not be moved to private storage yet.";
+      toast.classList.add("show");
+      window.setTimeout(() => toast.classList.remove("show"), 5000);
+    });
   } catch (error) {
     console.error("Could not load account data:", error);
     setAuthMessage("Could not load your cloud data. Check the database setup and try again.", true);
@@ -1866,11 +2533,14 @@ async function signUp() {
 
 $("#authForm").addEventListener("submit", signIn);
 $("#signUpButton").addEventListener("click", signUp);
-$("#signOutButton").addEventListener("click", async () => {
+async function signOut() {
   const { error } = await supabaseClient.auth.signOut();
   if (error) setAuthMessage(error.message, true);
   else await handleAuthSession(null);
-});
+}
+
+$("#signOutButton").addEventListener("click", signOut);
+$("#accountSignOutButton").addEventListener("click", signOut);
 
 supabaseClient.auth.onAuthStateChange((_event, session) => {
   window.setTimeout(() => handleAuthSession(session), 0);

@@ -1741,3 +1741,32 @@ textarea::placeholder {
     transition-duration: .01ms !important;
   }
 }
+
+.financial-reports-panel { margin-top: 24px; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-table-wrap { width: 100%; overflow-x: auto; margin-top: 12px; }
+.report-table { width: 100%; min-width: 690px; border-collapse: collapse; text-align: right; }
+.report-table th, .report-table td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
+.report-table thead th { color: #92969b; font-size: 11px; font-weight: 600; }
+.report-table tbody th { text-align: left; font-weight: 600; }
+.report-subheading { margin: 24px 0 8px; }
+
+@media (max-width: 720px) {
+  .report-actions { width: 100%; }
+  .report-actions button { flex: 1 1 45%; }
+}
+
+.mobile-account-link { display: none; }
+.account-panel, .ebay-import-panel { margin-bottom: 18px; }
+.account-panel .page-description { margin-bottom: 0; }
+.ebay-preview-table { min-width: 820px; }
+.ebay-preview-table td:first-child, .ebay-preview-table th:first-child { text-align: center; }
+.ebay-preview-table input[type="checkbox"] { accent-color: #efff00; width: 18px; height: 18px; }
+.import-sku { display: block; margin-top: 4px; color: #92969b; font-size: 11px; }
+.photo-camera-label { display: inline-block; margin-top: 12px; color: #efff00; cursor: pointer; text-decoration: underline; }
+.photo-search-button { margin-top: 12px; }
+
+@media (max-width: 700px) {
+  .mobile-account-link { display: inline-flex; padding: 7px 9px; font-size: 11px; }
+  .topbar-right { gap: 6px; }
+}
