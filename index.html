@@ -10,7 +10,24 @@
 
 <body>
 
-<div class="app-shell">
+<section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+  <form class="auth-card" id="authForm">
+    <p class="eyebrow">CACHE · PERSONAL EDITION</p>
+    <h1 id="authTitle">Sign in to CACHE</h1>
+    <p class="page-description">Your inventory and sales will sync to your account.</p>
+    <label for="authEmail">Email</label>
+    <input id="authEmail" name="email" type="email" autocomplete="email" required>
+    <label for="authPassword">Password</label>
+    <input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" required>
+    <div class="auth-actions">
+      <button class="primary-button" id="signInButton" type="submit">Sign in</button>
+      <button class="secondary-button" id="signUpButton" type="button">Create account</button>
+    </div>
+    <p class="form-message" id="authMessage" role="status" aria-live="polite"></p>
+  </form>
+</section>
+
+<div class="app-shell auth-locked" id="appShell">
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
@@ -94,6 +111,8 @@
       </div>
 
       <div class="topbar-right">
+
+        <button class="secondary-button account-button" id="signOutButton" type="button">Sign out</button>
 
         <div class="header-search">
           <span>⌕</span>
@@ -584,7 +603,7 @@
 
 
 <!-- MOBILE NAVIGATION -->
-<nav class="bottom-nav" aria-label="Main navigation">
+<nav class="bottom-nav auth-locked" id="bottomNav" aria-label="Main navigation">
 
   <button class="nav-button active" type="button" data-page="home">
     <span class="nav-icon">⌂</span>
@@ -654,6 +673,8 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script src="app.js"></script>
 
 </body>
