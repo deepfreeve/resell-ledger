@@ -5,6 +5,14 @@
 ========================================= */
 
 const STORAGE_KEY = "resellledger_data_v1";
+const CLOUD_TABLE = "cache_user_data";
+const supabaseClient = window.supabase.createClient(
+  window.CACHE_SUPABASE_URL,
+  window.CACHE_SUPABASE_PUBLISHABLE_KEY
+);
+let supabaseUser = null;
+let loadedUserId = null;
+let remoteSaveQueue = Promise.resolve();
 
 const CATEGORY_NAMES = {
   pokemon: "Pokémon cards",
@@ -59,32 +67,34 @@ function createEmptyData() {
   };
 }
 
-function loadData() {
+function normalizeData(saved) {
+  return {
+    items: Array.isArray(saved?.items) ? saved.items : [],
+    sales: Array.isArray(saved?.sales) ? saved.sales : [],
+    customCategories: Array.isArray(saved?.customCategories)
+      ? saved.customCategories : [],
+    funds: {
+      capital: Number(saved?.funds?.capital) || 0,
+      reinvestment: Number(saved?.funds?.reinvestment) || 0,
+      personal: Number(saved?.funds?.personal) || 0
+    }
+  };
+}
+
+function loadData(storageKey = STORAGE_KEY) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
 
     if (!stored) return createEmptyData();
 
-    const saved = JSON.parse(stored);
-
-    return {
-      items: Array.isArray(saved.items) ? saved.items : [],
-      sales: Array.isArray(saved.sales) ? saved.sales : [],
-      customCategories: Array.isArray(saved.customCategories)
-        ? saved.customCategories : [],
-      funds: {
-        capital: Number(saved.funds?.capital) || 0,
-        reinvestment: Number(saved.funds?.reinvestment) || 0,
-        personal: Number(saved.funds?.personal) || 0
-      }
-    };
+    return normalizeData(JSON.parse(stored));
   } catch (error) {
     console.error("Could not load data:", error);
     return createEmptyData();
   }
 }
 
-let data = loadData();
+let data = createEmptyData();
 
 function applyCustomCategoryNames() {
   data.customCategories.forEach((category) => {
@@ -95,14 +105,28 @@ function applyCustomCategoryNames() {
 applyCustomCategoryNames();
 
 function saveData() {
+  const userId = supabaseUser?.id;
+  if (!userId) return false;
+  const snapshot = JSON.parse(JSON.stringify(data));
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    return true;
+    localStorage.setItem(`${STORAGE_KEY}:${userId}`, JSON.stringify(snapshot));
   } catch (error) {
-    alert("Could not save. Your browser storage may be full. Try smaller photos.");
-    console.error(error);
-    return false;
+    console.warn("Local cache could not be updated:", error);
   }
+
+  remoteSaveQueue = remoteSaveQueue.then(async () => {
+    const { error } = await supabaseClient
+      .from(CLOUD_TABLE)
+      .upsert({ user_id: userId, payload: snapshot }, { onConflict: "user_id" });
+    if (error) throw error;
+  }).catch((error) => {
+    console.error("Cloud save failed:", error);
+    const status = $("#toast");
+    status.textContent = "Cloud sync failed. Check your connection before closing this page.";
+    status.classList.add("show");
+    window.setTimeout(() => status.classList.remove("show"), 5000);
+  });
+  return true;
 }
 
 /* =========================================
@@ -1737,10 +1761,122 @@ $("#categoryFilter").addEventListener(
    INITIALIZE
 ========================================= */
 
-updateCategoryOptions();
+function setAuthMessage(message, isError = false) {
+  const node = $("#authMessage");
+  node.textContent = message;
+  node.classList.toggle("error", isError);
+}
 
-$("#purchaseDate").value = todayString();
+function setAuthenticatedView(isAuthenticated) {
+  $("#authGate").classList.toggle("hidden", isAuthenticated);
+  $("#appShell").classList.toggle("auth-locked", !isAuthenticated);
+  $("#bottomNav").classList.toggle("auth-locked", !isAuthenticated);
+}
 
-setCardFieldsVisibility();
+async function loadAccountData(user) {
+  const { data: row, error } = await supabaseClient
+    .from(CLOUD_TABLE)
+    .select("payload")
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-renderAll();
+  if (error) throw error;
+
+  const accountKey = `${STORAGE_KEY}:${user.id}`;
+  if (row?.payload) {
+    data = normalizeData(row.payload);
+    try { localStorage.setItem(accountKey, JSON.stringify(data)); }
+    catch (error) { console.warn("Local cache could not be updated:", error); }
+  } else {
+    const savedAccountCopy = localStorage.getItem(accountKey);
+    const legacyCopy = localStorage.getItem(STORAGE_KEY);
+    data = savedAccountCopy
+      ? loadData(accountKey)
+      : (legacyCopy ? loadData(STORAGE_KEY) : createEmptyData());
+
+    const { error: saveError } = await supabaseClient
+      .from(CLOUD_TABLE)
+      .upsert({ user_id: user.id, payload: data }, { onConflict: "user_id" });
+    if (saveError) throw saveError;
+    try {
+      localStorage.setItem(accountKey, JSON.stringify(data));
+      if (legacyCopy) localStorage.removeItem(STORAGE_KEY);
+    } catch (cacheError) {
+      console.warn("Local cache could not be updated:", cacheError);
+    }
+  }
+
+  applyCustomCategoryNames();
+  updateCategoryOptions();
+  $("#purchaseDate").value = todayString();
+  setCardFieldsVisibility();
+  renderAll();
+}
+
+async function handleAuthSession(session) {
+  const user = session?.user || null;
+  if (!user) {
+    supabaseUser = null;
+    loadedUserId = null;
+    data = createEmptyData();
+    setAuthenticatedView(false);
+    return;
+  }
+
+  supabaseUser = user;
+  setAuthMessage("Loading your inventory…");
+  setAuthenticatedView(false);
+  if (loadedUserId === user.id) {
+    setAuthenticatedView(true);
+    return;
+  }
+
+  try {
+    await loadAccountData(user);
+    loadedUserId = user.id;
+    setAuthMessage("");
+    setAuthenticatedView(true);
+  } catch (error) {
+    console.error("Could not load account data:", error);
+    setAuthMessage("Could not load your cloud data. Check the database setup and try again.", true);
+  }
+}
+
+async function signIn(event) {
+  event.preventDefault();
+  setAuthMessage("Signing in…");
+  const { email, password } = Object.fromEntries(new FormData(event.currentTarget));
+  const { data: result, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) return setAuthMessage(error.message, true);
+  await handleAuthSession(result.session);
+}
+
+async function signUp() {
+  setAuthMessage("Creating your account…");
+  const email = $("#authEmail").value.trim();
+  const password = $("#authPassword").value;
+  if (!email || password.length < 8) {
+    return setAuthMessage("Enter an email and a password with at least 8 characters.", true);
+  }
+  const { data: result, error } = await supabaseClient.auth.signUp({ email, password });
+  if (error) return setAuthMessage(error.message, true);
+  if (result.session) await handleAuthSession(result.session);
+  else setAuthMessage("Account created. Check your email to confirm, then sign in.");
+}
+
+$("#authForm").addEventListener("submit", signIn);
+$("#signUpButton").addEventListener("click", signUp);
+$("#signOutButton").addEventListener("click", async () => {
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) setAuthMessage(error.message, true);
+  else await handleAuthSession(null);
+});
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  window.setTimeout(() => handleAuthSession(session), 0);
+});
+
+supabaseClient.auth.getSession().then(({ data: sessionData, error }) => {
+  if (error) return setAuthMessage("Could not check your sign-in session. Refresh and try again.", true);
+  handleAuthSession(sessionData.session);
+});
