@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101010">
+  <meta name="robots" content="noindex,follow">
+  <title>Delete your CACHE account</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .deletion-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .deletion-card { width: min(100%, 500px); padding: 30px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+    .deletion-card h1 { margin: 4px 0 10px; }
+    .deletion-card label { display: block; margin: 16px 0 6px; color: var(--muted); }
+    .deletion-card input { width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+    .deletion-card button { margin-top: 18px; }
+    .deletion-card .form-message { min-height: 1.5em; }
+    .deletion-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <main class="deletion-page">
+    <section class="deletion-card" aria-labelledby="deletionTitle">
+      <p class="eyebrow">CACHE ACCOUNT</p>
+      <h1 id="deletionTitle">Delete your account</h1>
+      <p class="page-description">This permanently deletes your CACHE account, inventory, sales, and private photos. This action cannot be undone. Download a backup from CACHE first if you want a copy.</p>
+      <form id="deletionForm">
+        <label for="deletionEmail">Account email</label>
+        <input id="deletionEmail" name="email" type="email" autocomplete="username" required>
+        <label for="deletionPassword">Password</label>
+        <input id="deletionPassword" name="password" type="password" autocomplete="current-password" required>
+        <label for="deletionConfirmation">Type DELETE to confirm</label>
+        <input id="deletionConfirmation" name="confirmation" type="text" autocomplete="off" autocapitalize="characters" pattern="DELETE" required>
+        <button id="deletionButton" class="danger-button" type="submit">Permanently delete my CACHE account</button>
+        <p id="deletionMessage" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+      <div class="deletion-links"><a href="/">Back to CACHE</a></div>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="delete-account.js"></script>
+</body>
+</html>

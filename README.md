@@ -15,6 +15,7 @@ View completed sales and lifetime profit
 Review monthly and category profit reports, export sales CSVs, and back up or restore account data
 Import eBay orders/sales CSVs and Listings Sales reports with preview, bought-cost entry, per-sale profit splits, and duplicate checks; summary reports use the report end date because they omit individual sale dates
 Reset account inventory, sales, balances, categories, and stored item photos
+Delete the signed-in account and its private photos through the in-app flow or public account-deletion page
 Search and filter available inventory
 Duplicate item details when purchasing multiple copies
 Project files
@@ -38,6 +39,7 @@ Future development
 Potential next steps are listed in TODO.md.
 Supabase setup
 Follow SUPABASE_SETUP.md to create the database table, enable email sign-in, and configure the live site URL.
+Native app packaging is being prepared with Capacitor. The current app remains a PWA until iOS/Android projects are generated, deep links and native interactions are finished, and both platforms are tested. See APP_STORE_READINESS.md.
 
 Optional Cloudflare server features
 The AI photo-to-draft and eBay active-listing search routes live in `functions/api/` and run as Cloudflare Pages Functions. They are disabled unless explicitly enabled. Configure these **server-side** variables/secrets in the Cloudflare Pages project (Settings → Variables and Secrets):

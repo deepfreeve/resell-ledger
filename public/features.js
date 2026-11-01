@@ -2,6 +2,9 @@
 
 /* CACHE reseller workspace features. Data stays inside the signed-in user's existing RLS-protected payload. */
 
+const CACHE_API_ORIGIN = window.CACHE_API_ORIGIN || window.location.origin;
+const cacheApiUrl = (path) => new URL(path, CACHE_API_ORIGIN).toString();
+
 function featureId() { return makeId(); }
 function featureDate() { return todayString(); }
 function featureFormData(form) { return Object.fromEntries(new FormData(form).entries()); }
@@ -127,7 +130,7 @@ async function runDealSearch(searchId) {
   results.innerHTML = '<p class="field-hint">Checking current eBay listings…</p>';
   try {
     const { data: sessionData } = await supabaseClient.auth.getSession();
-    const response = await fetch("/api/deal-search", {
+    const response = await fetch(cacheApiUrl("/api/deal-search"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
       body: JSON.stringify({ query: search.query, condition: search.condition, marketplace: search.marketplace || "EBAY_US", limit: 40 })
@@ -325,7 +328,7 @@ async function searchMarketValue(itemId, variantId = "") {
   results.innerHTML = '<p class="field-hint">Searching current TCG card values…</p>';
   try {
     const { data: sessionData } = await supabaseClient.auth.getSession();
-    const response = await fetch("/api/card-price-search", {
+    const response = await fetch(cacheApiUrl("/api/card-price-search"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
       body: JSON.stringify({ game: cardGame, name: item.name, set: item.cardSet, number: item.cardNumber, printing: item.cardPrinting, language: item.cardLanguage, itemCondition: item.itemCondition, cardType: item.cardType, gradingCompany: item.gradingCompany, grade: item.cardGrade, variantId })
@@ -478,7 +481,7 @@ $("#aiDraftForm").addEventListener("submit", async (event) => {
       return { dataUrl: await featureFileToDataUrl(blob), blob };
     }));
     const { data: sessionData } = await supabaseClient.auth.getSession();
-    const response = await fetch("/api/ai-draft", {
+    const response = await fetch(cacheApiUrl("/api/ai-draft"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
       body: JSON.stringify({ products: prepared.map((photo) => ({ imageData: photo.dataUrl })), context: String(new FormData(form).get("context") || ""), categories: Object.entries(CATEGORY_NAMES).map(([id, name]) => ({ id, name })) })

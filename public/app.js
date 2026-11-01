@@ -3120,6 +3120,63 @@ async function resetAccountData() {
   }
 }
 
+async function deleteAccount(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const message = $("#accountDeleteMessage");
+  const user = supabaseUser;
+  const password = form.elements.password.value;
+  const confirmation = form.elements.confirmation.value.trim();
+  if (!user?.id || !user.email) {
+    message.textContent = "Sign in before deleting your CACHE account.";
+    message.classList.add("error");
+    return;
+  }
+  if (confirmation !== "DELETE") {
+    message.textContent = "Type DELETE exactly to confirm account deletion.";
+    message.classList.add("error");
+    return;
+  }
+
+  button.disabled = true;
+  message.textContent = "Confirming your password…";
+  message.classList.remove("error");
+  try {
+    const { data: auth, error: authError } = await supabaseClient.auth.signInWithPassword({
+      email: user.email,
+      password
+    });
+    if (authError) throw new Error("We couldn't confirm your password. Check it and try again.");
+    if (auth.user?.id !== user.id || !auth.session?.access_token) {
+      throw new Error("The signed-in account changed. Refresh the page and try again.");
+    }
+
+    message.textContent = "Deleting your account, records, and private photos…";
+    const { error } = await supabaseClient.functions.invoke("delete-account", {
+      body: { confirmation },
+      headers: { Authorization: "Bearer " + auth.session.access_token }
+    });
+    if (error) {
+      let details;
+      try { details = await error.context?.json(); } catch { /* Use the SDK's fallback message. */ }
+      throw new Error(details?.error || error.message || "Account deletion did not finish.");
+    }
+
+    try { localStorage.removeItem(STORAGE_KEY + ":" + user.id); } catch { /* The remote account is already deleted. */ }
+    try { await supabaseClient.auth.signOut({ scope: "local" }); } catch { /* The Auth user is already deleted. */ }
+    form.reset();
+    await handleAuthSession(null);
+    setAuthMessage("Your CACHE account and associated data have been permanently deleted.");
+  } catch (error) {
+    console.error("CACHE account deletion did not finish:", error);
+    message.textContent = error.message || "Deletion did not finish. Try again.";
+    message.classList.add("error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleAuthSession(session) {
   const user = session?.user || null;
   if (!user) {
@@ -3230,6 +3287,7 @@ async function signOut() {
 $("#signOutButton").addEventListener("click", signOut);
 $("#accountSignOutButton").addEventListener("click", signOut);
 $("#resetAccountDataButton").addEventListener("click", resetAccountData);
+$("#deleteAccountForm").addEventListener("submit", deleteAccount);
 $("#cloudSyncStatus").addEventListener("click", retryCloudSync);
 $("#reportDateFrom").addEventListener("change", renderFinancialReports);
 $("#reportDateTo").addEventListener("change", renderFinancialReports);

@@ -25,7 +25,9 @@ Status reflects the current repository. A checkmark means the feature is impleme
 ## Finish after required account setup or design decisions
 
 - [x] Add the CACHE box logo as the iPhone/iPad home-screen bookmark icon, browser favicon, and Android PWA install icon/manifest.
-- [ ] Prepare native iOS/Android releases, in-app account deletion and public deletion URL, privacy/support materials, store disclosures/listings, signing, and device testing. Track prerequisites in [APP_STORE_READINESS.md](APP_STORE_READINESS.md); store enrollment and legal/support details require the owner.
+- [x] Add in-app account deletion and a public account-deletion page, backed by the deployed JWT-verified Supabase function. Recheck the flow with a disposable account before store release.
+- [x] Add Capacitor native configuration, pinned platform/CLI dependencies, scripts, and authenticated API support for native origins. Native projects, deep links, native review polish, signing, and device testing remain.
+- [ ] Prepare final privacy/support pages and disclosures, store artwork, signing, and device testing. Track prerequisites in [APP_STORE_READINESS.md](APP_STORE_READINESS.md); store enrollment and legal/support details require the owner.
 - [~] **Inventory market values:** Added market value fields, manual value entry, inventory total and known-cost gain summary, exact card metadata, and a JustTCG search route that requires the user to select a card and matching variant. Still needs the user's Cloudflare JustTCG secret, paid commercial plan before public/commercial display, live API verification, and a licensed sports-card provider. Graded prices use JustTCG's beta endpoint and may lack coverage.
 - [ ] Set Cloudflare Pages variables/secrets for optional AI, eBay Browse, and JustTCG endpoints; apply request rate limits before enabling paid AI and card-price lookups. Use a JustTCG paid commercial plan before public/commercial use. See README.md.
 - [ ] Verify the latest mobile navigation changes on the live Cloudflare deployment.

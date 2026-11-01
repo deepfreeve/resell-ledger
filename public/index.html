@@ -561,6 +561,23 @@
           <p class="form-message" id="accountResetMessage" role="status" aria-live="polite"></p>
         </section>
 
+        <section class="panel account-reset-panel" aria-labelledby="accountDeleteHeading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">PERMANENT ACTION</p>
+              <h3 id="accountDeleteHeading">Delete your CACHE account</h3>
+            </div>
+          </div>
+          <p class="field-hint">This permanently deletes your CACHE sign-in, inventory, sales, and private photos. Download a backup first if you want to keep a copy. This cannot be undone.</p>
+          <form id="deleteAccountForm" class="feature-form">
+            <label class="field">Current password<input name="password" type="password" autocomplete="current-password" required></label>
+            <label class="field">Type DELETE to confirm<input name="confirmation" type="text" autocomplete="off" autocapitalize="characters" pattern="DELETE" required></label>
+            <button class="danger-button" type="submit">Permanently delete my account</button>
+            <p class="form-message full-width" id="accountDeleteMessage" role="status" aria-live="polite"></p>
+          </form>
+          <p class="field-hint">You can also start deletion from <a href="/delete-account.html">the account deletion page</a>.</p>
+        </section>
+
         <section class="panel ebay-import-panel">
           <div class="panel-heading">
             <div>
