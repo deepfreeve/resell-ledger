@@ -1,6 +1,6 @@
 # CACHE backlog
 
-Status reflects the current local working copy. A checkmark means the feature is implemented in the app; server-backed features may still need Cloudflare credentials before use. Nothing here has been published by this work session.
+Status reflects the current repository. A checkmark means the feature is implemented in the app; server-backed features may still need Cloudflare credentials before use.
 
 ## Implemented in this working copy
 
@@ -20,13 +20,13 @@ Status reflects the current local working copy. A checkmark means the feature is
 - [x] Grading submission tracker with grading/shipping expenses added to item cost basis.
 - [x] Shipping desk, multi-item sale allocation, refund/return records, mixed-lot cost allocation, consignment balances, and configurable stale-inventory review list.
 - [x] Private image document attachments to inventory items.
-- [x] Responsive layouts for the added workspace tools.
+- [x] Responsive layouts for the added workspace tools, with a mobile Tools menu for Sourcing & deals, Listing drafts, Business tools, and Your account; mobile search is available from the header.
 
 ## Finish after required account setup or design decisions
 
 - [~] **Inventory market values:** Added market value fields, manual value entry, inventory total and known-cost gain summary, exact card metadata, and a JustTCG search route that requires the user to select a card and matching variant. Still needs the user's Cloudflare JustTCG secret, paid commercial plan before public/commercial display, live API verification, and a licensed sports-card provider. Graded prices use JustTCG's beta endpoint and may lack coverage.
 - [ ] Set Cloudflare Pages variables/secrets for optional AI, eBay Browse, and JustTCG endpoints; apply request rate limits before enabling paid AI and card-price lookups. Use a JustTCG paid commercial plan before public/commercial use. See README.md.
-- [ ] Deploy and verify on the live Cloudflare Pages project after reviewing the changes and getting the user's go-ahead.
+- [ ] Verify the latest mobile navigation changes on the live Cloudflare deployment.
 - [ ] Configure a custom domain and add it to Supabase Auth's allowed redirect URLs.
 - [ ] Add sample eBay refund/partial-refund and additional report formats, then extend the CSV parser and preview.
 - [ ] Implement secure eBay seller OAuth and reviewed batch publishing after configuring developer credentials, production access, token storage, and seller fulfillment/return/payment policies. Never store the seller password or expose client secrets in browser code.

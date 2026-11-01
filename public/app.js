@@ -1790,6 +1790,22 @@ function renderAll() {
    NAVIGATION
 ========================================= */
 
+function closeMobileToolsMenu() {
+  const menu = $("#mobileToolsMenu");
+  const toggle = $("#mobileToolsToggle");
+  if (!menu || !toggle) return;
+  menu.hidden = true;
+  toggle.setAttribute("aria-expanded", "false");
+}
+
+function closeMobileSearch() {
+  const search = $(".header-search");
+  const toggle = $("#mobileSearchToggle");
+  if (!search || !toggle) return;
+  search.classList.remove("mobile-search-open");
+  toggle.setAttribute("aria-expanded", "false");
+}
+
 function showPage(pageName) {
   if (!["home", "inventory", "add", "pending", "sold", "account", "sourcing", "drafts", "business"].includes(pageName)) {
     return;
@@ -1808,6 +1824,10 @@ function showPage(pageName) {
       button.dataset.page === pageName
     );
   });
+
+  const toolsToggle = $("#mobileToolsToggle");
+  if (toolsToggle) toolsToggle.classList.toggle("active", ["sourcing", "drafts", "business", "account"].includes(pageName));
+  closeMobileToolsMenu();
 
   const titles = {
     home: "Dashboard",
@@ -2756,6 +2776,39 @@ function deleteItem(itemId) {
 /* =========================================
    EVENT HANDLERS
 ========================================= */
+
+$("#mobileToolsToggle").addEventListener("click", () => {
+  const menu = $("#mobileToolsMenu");
+  const toggle = $("#mobileToolsToggle");
+  const open = toggle.getAttribute("aria-expanded") !== "true";
+  menu.hidden = !open;
+  toggle.setAttribute("aria-expanded", String(open));
+});
+
+$("#mobileToolsMenu").addEventListener("click", (event) => {
+  if (event.target.closest("[data-page]")) closeMobileToolsMenu();
+});
+
+$("#mobileSearchToggle").addEventListener("click", () => {
+  const search = $(".header-search");
+  const toggle = $("#mobileSearchToggle");
+  const open = !search.classList.contains("mobile-search-open");
+  search.classList.toggle("mobile-search-open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+  if (open) $("#globalSearch").focus();
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#mobileToolsMenu, #mobileToolsToggle")) closeMobileToolsMenu();
+  if (!event.target.closest(".header-search")) closeMobileSearch();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeMobileToolsMenu();
+    closeMobileSearch();
+  }
+});
 
 document.addEventListener("click", (event) => {
   const target = event.target;

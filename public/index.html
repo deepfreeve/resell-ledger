@@ -134,6 +134,7 @@
 
         <div class="header-search">
           <span>⌕</span>
+          <button class="mobile-search-toggle" id="mobileSearchToggle" type="button" aria-label="Search inventory" aria-expanded="false" aria-controls="globalSearch">⌕</button>
           <input
             type="search"
             id="globalSearch"
@@ -868,6 +869,18 @@
     <span class="nav-icon">✓</span>
     <span>Sold</span>
   </button>
+
+  <button class="nav-button" id="mobileToolsToggle" type="button" aria-label="Open more CACHE tools" aria-haspopup="true" aria-expanded="false" aria-controls="mobileToolsMenu">
+    <span class="nav-icon">⋯</span>
+    <span>Tools</span>
+  </button>
+
+  <div class="mobile-tools-menu" id="mobileToolsMenu" aria-label="More CACHE tools" hidden>
+    <button class="mobile-tool-link" type="button" data-page="sourcing"><span class="nav-icon">⌕</span><span>Sourcing &amp; deals</span></button>
+    <button class="mobile-tool-link" type="button" data-page="drafts"><span class="nav-icon">✎</span><span>Listing drafts</span></button>
+    <button class="mobile-tool-link" type="button" data-page="business"><span class="nav-icon">◈</span><span>Business tools</span></button>
+    <button class="mobile-tool-link" type="button" data-page="account"><span class="nav-icon">◉</span><span>Your account</span></button>
+  </div>
 
 </nav>
 
