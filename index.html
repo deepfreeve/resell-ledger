@@ -59,6 +59,8 @@
       <button class="sidebar-link" data-page="add" type="button">
         <span class="nav-icon">＋</span> Add item
       </button>
+      <button class="sidebar-link" data-page="sourcing" type="button"><span class="nav-icon">⌕</span> Sourcing & deals</button>
+      <button class="sidebar-link" data-page="drafts" type="button"><span class="nav-icon">✎</span> Listing drafts</button>
     </div>
 
     <div class="sidebar-section">
@@ -83,6 +85,7 @@
       <button class="sidebar-link" data-page="inventory" type="button">
         <span class="nav-icon">▦</span> Products
       </button>
+      <button class="sidebar-link" data-page="business" type="button"><span class="nav-icon">◈</span> Business tools</button>
     </div>
 
     <div class="sidebar-bottom">
@@ -225,6 +228,15 @@
 
             <h2 id="inventoryValue">$0.00</h2>
             <p>Combined listed prices of in-stock items</p>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-top">
+              <span>Estimated market value</span>
+              <span class="stat-icon">◇</span>
+            </div>
+            <h2 id="marketInventoryValue">$0.00</h2>
+            <p id="marketInventorySummary">No market values saved yet</p>
           </article>
 
 
@@ -423,6 +435,91 @@
       </section>
 
       <!-- ACCOUNT -->
+      <section class="page" id="page-sourcing">
+        <div class="page-heading"><div><p class="eyebrow">FIND YOUR NEXT BUY</p><h1>Sourcing & deals</h1><p class="page-description">Track where you buy, set deal rules, and judge opportunities against real sale data.</p></div></div>
+        <section class="panel feature-panel">
+          <div class="panel-heading"><div><p class="eyebrow">SELECTIVE DEAL FINDER</p><h3>Saved deal searches</h3></div></div>
+          <p class="field-hint">CACHE will only label an eBay listing a possible deal when there are enough comparable sales with a close product and condition match. eBay sold-price API access is restricted, so your own sales and manually entered comps are used unless an approved source is configured.</p>
+          <form id="dealSearchForm" class="feature-form">
+            <label class="field">Product or search phrase<input name="query" maxlength="100" required placeholder="Charizard 151, PSA 10"></label>
+            <label class="field">Condition<select name="condition"><option value="any">Any</option><option>New</option><option>Near Mint</option><option>Lightly Played</option><option>Moderately Played</option><option>Heavily Played</option><option>Damaged</option><option>Graded</option><option>Used</option></select></label>
+            <label class="field">Max all-in buy cost ($)<input name="maxCost" type="number" min="0" step="0.01" value="25"></label>
+            <label class="field">Minimum expected profit ($)<input name="minProfit" type="number" min="0" step="0.01" value="10"></label>
+            <label class="field">Minimum ROI (%)<input name="minRoi" type="number" min="0" step="1" value="30"></label>
+            <label class="field">Minimum comparable sales<input name="minimumComps" type="number" min="1" max="100" step="1" value="3"></label>
+            <label class="field">Shipping cap ($)<input name="maxShipping" type="number" min="0" step="0.01" value="8"></label>
+            <label class="field">Estimated platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label>
+            <div class="detail-actions full-width"><button class="primary-button" type="submit">Save search</button><button class="secondary-button" type="button" id="scanDealsButton">Check eBay listings</button><button class="secondary-button" type="button" id="dealNotificationsButton">Turn on deal alerts</button></div>
+          </form>
+          <div id="dealSearchList" class="feature-list"></div>
+          <div id="dealResults" class="deal-results" aria-live="polite"></div>
+        </section>
+        <div class="dashboard-grid">
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PRICE REFERENCE</p><h3>Add a sold comparison</h3></div></div>
+            <form id="priceCompForm" class="feature-form"><label class="field">Product<input name="product" required maxlength="120"></label><label class="field">Condition<input name="condition" required maxlength="60" placeholder="Near Mint"></label><label class="field">Sold price ($)<input name="price" type="number" min="0.01" step="0.01" required></label><label class="field">Sold date<input name="soldDate" type="date" required></label><label class="field">Source<input name="source" maxlength="80" placeholder="eBay sold listing"></label><button class="primary-button" type="submit">Save comparison</button></form>
+            <div id="priceCompList" class="feature-list"></div>
+          </section>
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">SOURCE PERFORMANCE</p><h3>Log a sourcing trip or purchase</h3></div></div>
+            <form id="sourceLogForm" class="feature-form"><label class="field">Store / source<input name="source" required maxlength="100" placeholder="Card show, shop, eBay"></label><label class="field">Purchase date<input name="date" type="date" required></label><label class="field">Items purchased<input name="count" type="number" min="1" step="1" value="1" required></label><label class="field">Purchase total ($)<input name="cost" type="number" min="0" step="0.01" required></label><label class="field">Travel / inbound shipping ($)<input name="extra" type="number" min="0" step="0.01" value="0" required></label><label class="field">Notes<input name="notes" maxlength="300"></label><button class="primary-button" type="submit">Log purchase</button></form>
+            <div id="sourceLogList" class="feature-list"></div>
+          </section>
+        </div>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">BUY PLAN</p><h3>Compare a potential purchase</h3></div></div>
+          <form id="buyPlanForm" class="feature-form"><label class="field">Item<input name="name" required maxlength="120"></label><label class="field">Buy price ($)<input name="buyPrice" type="number" min="0" step="0.01" required></label><label class="field">Inbound shipping ($)<input name="inbound" type="number" min="0" step="0.01" value="0" required></label><label class="field">Expected resale price ($)<input name="resale" type="number" min="0" step="0.01" required></label><label class="field">Platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13" required></label><label class="field">Outgoing shipping ($)<input name="outbound" type="number" min="0" step="0.01" value="6" required></label><button class="primary-button" type="submit">Save buy plan</button></form>
+          <div id="buyPlanList" class="feature-list"></div>
+        </section>
+      </section>
+
+      <section class="page" id="page-drafts">
+        <div class="page-heading"><div><p class="eyebrow">LISTING WORKSPACE</p><h1>Listing drafts</h1><p class="page-description">Prepare and review listings before turning them into inventory or publishing.</p></div></div>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">AI BATCH INTAKE</p><h3>Start drafts from product photos</h3></div></div>
+          <p class="field-hint">Choose one or more product photos. AI suggestions may be wrong, so review and edit every draft. CACHE will not invent purchase costs or dates. Photos are sent to the configured AI service only when you choose Generate drafts.</p>
+          <form id="aiDraftForm" class="feature-form"><label class="field">Product photos<input id="draftPhotoFiles" name="photos" type="file" accept="image/*" multiple required></label><label class="field">Extra details (optional)<textarea name="context" rows="3" maxlength="1000" placeholder="Set, edition, defects, what you know"></textarea></label><button class="primary-button" type="submit">Generate draft suggestions</button><p id="draftStatus" class="form-message full-width" role="status" aria-live="polite"></p></form>
+        </section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">MANUAL DRAFT</p><h3>Create a listing draft</h3></div></div>
+          <form id="manualDraftForm" class="feature-form"><label class="field">Title<input name="title" required maxlength="140"></label><label class="field">Category<select name="category" id="draftCategory"></select></label><label class="field">Condition<input name="condition" required maxlength="60" value="Not specified"></label><label class="field">Suggested price ($)<input name="price" type="number" min="0" step="0.01"></label><label class="field full-width">Description<textarea name="description" rows="4" maxlength="4000"></textarea></label><button class="primary-button" type="submit">Save draft</button></form>
+        </section>
+        <div id="listingDraftList" class="draft-grid"></div>
+      </section>
+
+      <section class="page" id="page-business">
+        <div class="page-heading"><div><p class="eyebrow">BUSINESS WORKSPACE</p><h1>Business tools</h1><p class="page-description">Price with costs in mind, track grading and goals, manage fulfillment, and keep sales records complete.</p></div></div>
+        <div class="dashboard-grid">
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PRICING</p><h3>Fee and shipping estimator</h3></div></div>
+            <form id="feeEstimatorForm" class="feature-form"><label class="field">Expected sale price ($)<input name="salePrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Offer received ($)<input name="offerPrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label><label class="field">Fixed fee ($)<input name="fixedFee" type="number" min="0" step="0.01" value="0.30"></label><label class="field">Shipping cost ($)<input name="shipping" type="number" min="0" step="0.01" value="6"></label><label class="field">Bought cost ($)<input name="purchaseCost" type="number" min="0" step="0.01" value="0"></label><label class="field">Other cost ($)<input name="other" type="number" min="0" step="0.01" value="0"></label><label class="field">Target profit ($)<input name="targetProfit" type="number" min="0" step="0.01" value="10"></label></form>
+            <div id="feeEstimatorResult" class="sale-summary" role="status" aria-live="polite"></div>
+          </section>
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h3>Profit goals</h3></div></div>
+            <form id="goalForm" class="feature-form"><label class="field">Goal name<input name="name" required maxlength="80" placeholder="November target"></label><label class="field">Target profit ($)<input name="target" type="number" min="1" step="0.01" required></label><label class="field">Period<select name="period"><option value="month">This month</option><option value="week">This week</option></select></label><button class="primary-button" type="submit">Set goal</button></form><div id="goalList" class="feature-list"></div>
+          </section>
+        </div>
+        <div class="dashboard-grid">
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">CARD GRADING</p><h3>Track a grading submission</h3></div></div>
+            <form id="gradingForm" class="feature-form"><label class="field">Inventory item<select name="itemId" id="gradingItemSelect" required></select></label><label class="field">Company<input name="company" required maxlength="60" placeholder="PSA"></label><label class="field">Submission date<input name="date" type="date" required></label><label class="field">Grading fee ($)<input name="fee" type="number" min="0" step="0.01" required></label><label class="field">Shipping and insurance ($)<input name="shipping" type="number" min="0" step="0.01" value="0" required></label><label class="field">Estimated value after grading ($)<input name="estimatedValue" type="number" min="0" step="0.01"></label><label class="field">Status<select name="status"><option>Preparing</option><option>Submitted</option><option>In grading</option><option>Shipped back</option><option>Complete</option></select></label><button class="primary-button" type="submit">Save submission</button></form><div id="gradingList" class="feature-list"></div>
+          </section>
+          <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">FULFILLMENT</p><h3>Shipping desk</h3></div></div>
+            <form id="shipmentForm" class="feature-form"><label class="field">Paid sale<select name="saleId" id="shipmentSaleSelect" required></select></label><label class="field">Carrier<input name="carrier" maxlength="60" placeholder="USPS"></label><label class="field">Tracking number<input name="tracking" maxlength="100"></label><label class="field">Ship-by date<input name="shipBy" type="date"></label><label class="field">Package / notes<input name="notes" maxlength="120"></label><button class="primary-button" type="submit">Save shipment</button></form><div id="shipmentList" class="feature-list"></div>
+          </section>
+        </div>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">BUNDLES & LOTS</p><h3>Record a multi-item sale</h3></div></div><p class="field-hint">Choose the items sold together. CACHE will split revenue and sale costs across them so each item's cost and profit remain traceable.</p>
+          <form id="bundleSaleForm" class="feature-form"><div id="bundleItemChoices" class="lot-item-choices full-width"></div><label class="field">Total sale price ($)<input name="price" type="number" min="0.01" step="0.01" required></label><label class="field">Platform fees ($)<input name="fees" type="number" min="0" step="0.01" value="0" required></label><label class="field">Shipping cost ($)<input name="shipping" type="number" min="0" step="0.01" value="0" required></label><label class="field">Other costs ($)<input name="other" type="number" min="0" step="0.01" value="0" required></label><label class="field">Split method<select name="splitMethod"><option value="listed">By listed price</option><option value="equal">Even split</option></select></label><label class="field">Platform<select name="platform"><option value="other">Other</option><option value="ebay">eBay</option></select></label><label class="field">Sale date<input name="date" type="date" required></label><button class="primary-button" type="submit">Record bundle sale</button></form>
+        </section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">RETURNS</p><h3>Record a refund or return</h3></div></div>
+          <p class="field-hint">Refunds update recorded sale proceeds and funds. Mark the item returned only if it is physically back and ready to sell.</p><form id="returnForm" class="feature-form"><label class="field">Paid sale<select name="saleId" id="returnSaleSelect" required></select></label><label class="field">Refund amount ($)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Refund date<input name="date" type="date" required></label><label class="field">Item received back?<select name="returned"><option value="no">No</option><option value="yes">Yes, return to inventory</option></select></label><label class="field">Reason / notes<input name="notes" maxlength="200"></label><button class="primary-button" type="submit">Record refund</button></form><div id="returnList" class="feature-list"></div>
+        </section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">BULK COST BASIS</p><h3>Split mixed-lot purchase cost</h3></div></div><p class="field-hint">Choose unsold items from one lot and allocate the full lot price by item value or evenly. This records bought cost per item; it does not guess purchase dates.</p>
+          <form id="lotSplitForm" class="feature-form"><label class="field">Lot name<input name="name" maxlength="100" required></label><label class="field">Total lot cost ($)<input name="cost" type="number" min="0.01" step="0.01" required></label><label class="field">Allocation<select name="method"><option value="equal">Even split</option><option value="listed">By listed value</option></select></label><div id="lotItemChoices" class="lot-item-choices full-width"></div><button class="primary-button" type="submit">Allocate cost</button></form><div id="lotSplitList" class="feature-list"></div>
+        </section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">REPRICING</p><h3>Review stale inventory</h3></div></div><label class="field">Remind me after days listed <input id="repricingDays" type="number" min="1" max="365" step="1"></label><div id="repricingList" class="feature-list"></div></section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">ACCOUNTING</p><h3>Consignment balances</h3></div></div><div id="consignmentReport" class="feature-list"></div></section>
+        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">RECORDS</p><h3>Receipts and documents</h3></div></div>
+          <p class="field-hint">Attach a private image of a receipt, grading record, or shipping document. Image files are supported by the current private storage bucket.</p>
+          <form id="documentForm" class="feature-form"><label class="field">Inventory item<select name="itemId" required></select></label><label class="field">Document name<input name="title" maxlength="100" required placeholder="Purchase receipt"></label><label class="field">Type<select name="kind"><option>Receipt</option><option>Grading record</option><option>Shipping document</option><option>Other</option></select></label><label class="field">Image file<input id="documentImage" type="file" accept="image/*" required></label><button class="primary-button" type="submit">Upload privately</button><p id="documentStatus" class="form-message full-width" role="status" aria-live="polite"></p></form>
+          <div id="documentList" class="feature-list"></div>
+        </section>
+      </section>
+
+      <!-- ACCOUNT -->
       <section class="page" id="page-account">
         <div class="page-heading">
           <div>
@@ -547,6 +644,8 @@
           <div class="form-group">
             <label for="itemSku">SKU / eBay custom label</label>
             <input id="itemSku" name="itemSku" type="text" placeholder="Optional; helps match eBay sales">
+            <button class="secondary-button" id="scanSkuButton" type="button">Scan barcode</button>
+            <p class="field-hint" id="skuScanMessage" role="status"></p>
           </div>
 
           <div class="form-row">
@@ -596,6 +695,19 @@
 
             </div>
 
+            <div class="form-row card-market-fields">
+              <div class="form-group">
+                <label for="cardGame">Card game</label>
+                <select id="cardGame" name="cardGame">
+                  <option value="pokemon">Pokémon</option><option value="pokemon-japan">Pokémon (Japanese)</option><option value="magic">Magic: The Gathering</option><option value="yugioh">Yu-Gi-Oh!</option><option value="one-piece">One Piece</option><option value="lorcana">Disney Lorcana</option><option value="digimon">Digimon</option><option value="other">Other / sports card</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="cardSet">Set / series</label><input id="cardSet" name="cardSet" maxlength="100" placeholder="Set or release year"></div>
+              <div class="form-group"><label for="cardNumber">Card number</label><input id="cardNumber" name="cardNumber" maxlength="40" placeholder="e.g. 4/102"></div>
+              <div class="form-group"><label for="cardPrinting">Printing / parallel</label><input id="cardPrinting" name="cardPrinting" maxlength="80" placeholder="Holo, 1st Edition, Silver Prizm"></div>
+              <div class="form-group"><label for="cardLanguage">Language</label><input id="cardLanguage" name="cardLanguage" maxlength="40" placeholder="English"></div>
+            </div>
+
             <div class="form-group">
               <label for="certNumber">Certification number</label>
               <input id="certNumber" name="certNumber" type="text" placeholder="Optional">
@@ -636,6 +748,20 @@
               <input id="purchaseDate" name="purchaseDate" type="date">
             </div>
 
+          </div>
+
+          <div class="form-row">
+            <div class="form-group"><label for="purchaseSource">Purchase source</label><input id="purchaseSource" name="purchaseSource" maxlength="100" placeholder="Shop, show, eBay..."></div>
+            <div class="form-group"><label for="storageLocation">Storage location</label><input id="storageLocation" name="storageLocation" maxlength="80" placeholder="Box A · Row 2"></div>
+            <div class="form-group"><label for="ownershipType">Ownership</label><select id="ownershipType" name="ownershipType"><option value="owned">Owned inventory</option><option value="consigned">Consigned</option></select></div>
+            <div class="form-group" id="consignmentShareGroup" hidden><label for="consignmentPercent">Owner payout share (%)</label><input id="consignmentPercent" name="consignmentPercent" type="number" min="0" max="100" step="1" value="50"></div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group"><label for="packageWeight">Package weight (oz)</label><input id="packageWeight" name="packageWeight" type="number" min="0" step="0.1"></div>
+            <div class="form-group"><label for="packageLength">Length (in)</label><input id="packageLength" name="packageLength" type="number" min="0" step="0.1"></div>
+            <div class="form-group"><label for="packageWidth">Width (in)</label><input id="packageWidth" name="packageWidth" type="number" min="0" step="0.1"></div>
+            <div class="form-group"><label for="packageHeight">Height (in)</label><input id="packageHeight" name="packageHeight" type="number" min="0" step="0.1"></div>
           </div>
 
           <div class="form-group">
@@ -790,6 +916,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <script src="app.js"></script>
+<script src="features.js"></script>
 
 </body>
 </html>

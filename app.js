@@ -62,14 +62,27 @@ let ebayImportRows = [];
 
 function createEmptyData() {
   return {
-    accountingVersion: 2,
+    accountingVersion: 3,
     items: [],
     sales: [],
     customCategories: [],
+    dealSearches: [],
+    sourcingLog: [],
+    priceComps: [],
+    listingDrafts: [],
+    buyPlans: [],
+    goals: [],
+    gradingSubmissions: [],
+    documents: [],
+    lotPurchases: [],
+    shipments: [],
+    returnRecords: [],
+    settings: { defaultFeePercent: 13, defaultOutgoingShipping: 6, repricingReviewDays: 30 },
     funds: {
       capital: 0,
       reinvestment: 0,
-      personal: 0
+      personal: 0,
+      consignmentOwed: 0
     }
   };
 }
@@ -81,10 +94,27 @@ function normalizeData(saved) {
     sales: Array.isArray(saved?.sales) ? saved.sales : [],
     customCategories: Array.isArray(saved?.customCategories)
       ? saved.customCategories : [],
+    dealSearches: Array.isArray(saved?.dealSearches) ? saved.dealSearches : [],
+    sourcingLog: Array.isArray(saved?.sourcingLog) ? saved.sourcingLog : [],
+    priceComps: Array.isArray(saved?.priceComps) ? saved.priceComps : [],
+    listingDrafts: Array.isArray(saved?.listingDrafts) ? saved.listingDrafts : [],
+    buyPlans: Array.isArray(saved?.buyPlans) ? saved.buyPlans : [],
+    goals: Array.isArray(saved?.goals) ? saved.goals : [],
+    gradingSubmissions: Array.isArray(saved?.gradingSubmissions) ? saved.gradingSubmissions : [],
+    documents: Array.isArray(saved?.documents) ? saved.documents : [],
+    lotPurchases: Array.isArray(saved?.lotPurchases) ? saved.lotPurchases : [],
+    shipments: Array.isArray(saved?.shipments) ? saved.shipments : [],
+    returnRecords: Array.isArray(saved?.returnRecords) ? saved.returnRecords : [],
+    settings: {
+      defaultFeePercent: Number(saved?.settings?.defaultFeePercent ?? 13),
+      defaultOutgoingShipping: Number(saved?.settings?.defaultOutgoingShipping ?? 6),
+      repricingReviewDays: Number(saved?.settings?.repricingReviewDays ?? 30)
+    },
     funds: {
       capital: Number(saved?.funds?.capital) || 0,
       reinvestment: Number(saved?.funds?.reinvestment) || 0,
-      personal: Number(saved?.funds?.personal) || 0
+      personal: Number(saved?.funds?.personal) || 0,
+      consignmentOwed: Number(saved?.funds?.consignmentOwed) || 0
     }
   };
   if (normalized.accountingVersion < 2) {
@@ -92,6 +122,7 @@ function normalizeData(saved) {
     normalized.funds.capital = 0;
     normalized.accountingVersion = 2;
   }
+  normalized.accountingVersion = Math.max(normalized.accountingVersion, 3);
   return normalized;
 }
 
@@ -225,22 +256,31 @@ function categoryName(item) {
 }
 
 function getSaleForItem(itemId) {
-  return data.sales.find((sale) => sale.itemId === itemId);
+  return data.sales.find((sale) => sale.itemId === itemId && !(sale.status === "refunded" && sale.returnedToInventory));
+}
+
+function itemCostBasis(item) {
+  return Math.round(((Number(item?.purchaseCost) || 0) + (Number(item?.additionalCostBasis) || 0)) * 100) / 100;
 }
 
 function netProceeds(sale) {
   return Number(sale.salePrice || 0) -
     Number(sale.platformFees || 0) -
     Number(sale.shipping || 0) -
-    Number(sale.otherCosts || 0);
+  Number(sale.otherCosts || 0) -
+  Number(sale.refundAmount || 0);
 }
 
 function saleProfit(sale) {
   const item = data.items.find((entry) => entry.id === sale.itemId);
 
   if (!item) return 0;
+  if (item.ownershipType === "consigned") {
+    const ownerShare = Math.max(0, Math.min(100, Number(item.consignmentPercent ?? 50))) / 100;
+    return netProceeds(sale) * (1 - ownerShare);
+  }
   if (item.purchaseCostUnknown) return null;
-  return netProceeds(sale) - Number(item.purchaseCost || 0);
+  return netProceeds(sale) - itemCostBasis(item);
 }
 
 function pendingTotal() {
@@ -256,7 +296,7 @@ function lifetimeProfit() {
 }
 
 function saleCostBreakdown(sale, item) {
-  const purchase = Number(item?.purchaseCost) || 0;
+  const purchase = itemCostBasis(item);
   const fees = Number(sale.platformFees) || 0;
   const shipping = Number(sale.shipping) || 0;
   const other = Number(sale.otherCosts) || 0;
@@ -276,7 +316,28 @@ function saleCostBreakdown(sale, item) {
 }
 
 function allocatePaidSaleFunds(sale, item) {
-  if (!item || item.purchaseCostUnknown) return;
+  if (!item) return;
+  if (item.ownershipType === "consigned") {
+    const ownerShare = Math.max(0, Math.min(100, Number(item.consignmentPercent ?? 50))) / 100;
+    const net = Math.max(0, netProceeds(sale));
+    const owed = Math.round(net * ownerShare * 100) / 100;
+    const sellerNet = Math.round((net - owed) * 100) / 100;
+    const percent = Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)));
+    const reinvestment = Math.round(sellerNet * percent) / 100;
+    const personal = Math.round((sellerNet - reinvestment) * 100) / 100;
+    data.funds.consignmentOwed = (Number(data.funds.consignmentOwed) || 0) + owed;
+    data.funds.reinvestment += reinvestment;
+    data.funds.personal += personal;
+    sale.consignmentOwed = owed;
+    sale.capitalRecovered = 0;
+    sale.reinvestmentPercent = percent;
+    sale.reinvestmentAdded = reinvestment;
+    sale.personalAdded = personal;
+    sale.allocationVersion = 3;
+    sale.fundsAllocated = true;
+    return;
+  }
+  if (item.purchaseCostUnknown) return;
   const allocation = saleCostBreakdown(sale, item);
   data.funds.reinvestment += allocation.reinvestmentAdded;
   data.funds.personal += allocation.personalAdded;
@@ -434,6 +495,11 @@ function updateDashboard() {
     (total, item) => total + Number(item.listedPrice || 0),
     0
   );
+  const pricedMarketItems = unsoldItems.filter((item) => item.marketValue !== undefined && item.marketValue !== null && item.marketValue !== "" && Number.isFinite(Number(item.marketValue)) && Number(item.marketValue) >= 0);
+  const marketValueTotal = pricedMarketItems.reduce((total, item) => total + Number(item.marketValue), 0);
+  const marketKnownCostItems = pricedMarketItems.filter((item) => !item.purchaseCostUnknown);
+  const marketKnownValue = marketKnownCostItems.reduce((total, item) => total + Number(item.marketValue), 0);
+  const marketBasis = marketKnownCostItems.reduce((total, item) => total + itemCostBasis(item), 0);
 
   const salesRevenue = data.sales.reduce(
     (total, sale) => total + Number(sale.salePrice || 0),
@@ -441,7 +507,7 @@ function updateDashboard() {
   );
 
   const lifetimeInventorySpend = data.items.reduce(
-    (total, item) => total + (!item.purchaseCostUnknown && !item.purchaseCostEstimated ? Number(item.purchaseCost || 0) : 0),
+    (total, item) => total + (!item.purchaseCostUnknown && !item.purchaseCostEstimated ? itemCostBasis(item) : 0),
     0
   );
 
@@ -462,6 +528,10 @@ function updateDashboard() {
 
   $("#totalInventoryValue").textContent = unsoldItems.length;
   $("#inventoryValue").textContent = money(inventoryValue);
+  $("#marketInventoryValue").textContent = money(marketValueTotal);
+  $("#marketInventorySummary").textContent = pricedMarketItems.length
+    ? `${pricedMarketItems.length} of ${unsoldItems.length} in-stock items priced · estimated gain ${money(marketKnownValue - marketBasis)} across ${marketKnownCostItems.length} with known cost`
+    : "No market values saved yet";
 
   $("#salesOverviewTotal").textContent = money(salesRevenue);
 
@@ -503,7 +573,7 @@ function renderFinancialReports() {
     const item = data.items.find((entry) => entry.id === sale.itemId);
     const row = byMonth.get(month) || { revenue: 0, costs: 0, net: 0, inventory: 0, profit: 0, unknownCosts: 0 };
     const net = netProceeds(sale);
-    const inventory = Number(item?.purchaseCost || 0);
+    const inventory = item && !item.purchaseCostUnknown ? itemCostBasis(item) : 0;
     row.revenue += Number(sale.salePrice || 0);
     row.costs += Number(sale.platformFees || 0) + Number(sale.shipping || 0) + Number(sale.otherCosts || 0);
     row.net += net;
@@ -581,7 +651,7 @@ function exportSalesCsv() {
       : "Recorded sale date";
     return [item?.name || "", item ? categoryName(item) : "Other", sale.source === "ebay" ? "eBay" : (sale.platform || "Other"), sale.saleDate, saleDateSource, sale.status,
       sale.salePrice, sale.platformFees, sale.shipping, sale.otherCosts, netProceeds(sale),
-      item?.purchaseCost || 0, item?.purchaseCostEstimated ? "Yes" : "No", sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
+      item ? itemCostBasis(item) : 0, item?.purchaseCostEstimated ? "Yes" : "No", sale.status === "paid" && saleProfit(sale) !== null ? saleProfit(sale) : ""];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
   downloadFile(`cache-sales-${todayString()}.csv`, `\uFEFF${csv}`, "text/csv;charset=utf-8");
@@ -598,12 +668,26 @@ function blobToDataUrl(blob) {
 
 async function createBackup() {
   const backupData = JSON.parse(JSON.stringify(data));
+  const storedPaths = new Set();
   for (const item of backupData.items) {
-    if (!item.photo || item.photo.startsWith("data:")) continue;
-    const { data: photo, error } = await supabaseClient.storage.from(PHOTO_BUCKET).download(item.photo);
-    if (error) throw error;
-    item.photo = await blobToDataUrl(photo);
+    if (item.photo && !item.photo.startsWith("data:")) storedPaths.add(item.photo);
+    (Array.isArray(item.photos) ? item.photos : []).forEach((path) => { if (path && !path.startsWith("data:")) storedPaths.add(path); });
   }
+  for (const draft of backupData.listingDrafts || []) (Array.isArray(draft.photos) ? draft.photos : []).forEach((path) => { if (path && !path.startsWith("data:")) storedPaths.add(path); });
+  for (const document of backupData.documents || []) if (document.path && !document.path.startsWith("data:")) storedPaths.add(document.path);
+  const embedded = {};
+  for (const path of storedPaths) {
+    const { data: blob, error } = await supabaseClient.storage.from(PHOTO_BUCKET).download(path);
+    if (error) throw error;
+    embedded[path] = await blobToDataUrl(blob);
+  }
+  const replacePath = (path) => embedded[path] || path;
+  for (const item of backupData.items) {
+    item.photo = replacePath(item.photo);
+    item.photos = (Array.isArray(item.photos) ? item.photos : []).map(replacePath);
+  }
+  for (const draft of backupData.listingDrafts || []) draft.photos = (Array.isArray(draft.photos) ? draft.photos : []).map(replacePath);
+  for (const document of backupData.documents || []) document.path = replacePath(document.path);
   downloadFile(`cache-backup-${todayString()}.json`, JSON.stringify({ app: "CACHE", version: 1, exportedAt: new Date().toISOString(), data: backupData }, null, 2), "application/json");
 }
 
@@ -624,10 +708,18 @@ async function restoreBackup(event) {
     if (!confirm("Replace all current inventory, sales, categories, and funds with this backup? This cannot be undone.")) return;
 
     const restored = normalizeData(backup.data);
+    const uploadedPaths = new Map();
+    const restorePath = async (path, itemId) => {
+      if (typeof path !== "string" || !path.startsWith("data:image/")) return path || "";
+      if (!uploadedPaths.has(path)) uploadedPaths.set(path, await uploadEmbeddedPhoto(path, itemId));
+      return uploadedPaths.get(path);
+    };
     for (const item of restored.items) {
-      if (typeof item.photo !== "string" || !item.photo.startsWith("data:image/")) continue;
-      item.photo = await uploadEmbeddedPhoto(item.photo, item.id);
+      item.photo = await restorePath(item.photo, item.id);
+      item.photos = await Promise.all((Array.isArray(item.photos) ? item.photos : []).map((path) => restorePath(path, item.id)));
     }
+    for (const draft of restored.listingDrafts || []) draft.photos = await Promise.all((Array.isArray(draft.photos) ? draft.photos : []).map((path) => restorePath(path, draft.id)));
+    for (const document of restored.documents || []) document.path = await restorePath(document.path, document.itemId);
     data = restored;
     Object.keys(CATEGORY_NAMES).filter((id) => id.startsWith("custom_")).forEach((id) => delete CATEGORY_NAMES[id]);
     applyCustomCategoryNames();
@@ -1521,6 +1613,7 @@ function itemRow(item) {
         </strong>
 
         <span>${sale ? "Net proceeds" : "Listed price"}</span>
+        ${!sale && item.marketValue !== undefined && item.marketValue !== null && item.marketValue !== "" && Number.isFinite(Number(item.marketValue)) ? `<span class="market-value-chip">Market ${money(item.marketValue)}</span>` : ""}
 
         <button class="text-button" type="button"
           data-open-item="${escapeHtml(item.id)}">
@@ -1690,6 +1783,7 @@ function renderAll() {
   renderPending();
   renderSold();
   hydratePhotos(document);
+  if (typeof renderWorkspace === "function") renderWorkspace();
 }
 
 /* =========================================
@@ -1697,7 +1791,7 @@ function renderAll() {
 ========================================= */
 
 function showPage(pageName) {
-  if (!["home", "inventory", "add", "pending", "sold", "account"].includes(pageName)) {
+  if (!["home", "inventory", "add", "pending", "sold", "account", "sourcing", "drafts", "business"].includes(pageName)) {
     return;
   }
 
@@ -1721,7 +1815,10 @@ function showPage(pageName) {
     add: "Add item",
     pending: "Pending payouts",
     sold: "Completed sales",
-    account: "Your account"
+    account: "Your account",
+    sourcing: "Sourcing & deals",
+    drafts: "Listing drafts",
+    business: "Business tools"
   };
 
   const title = $("#currentPageTitle");
@@ -1901,10 +1998,11 @@ async function saveItemForm(event) {
   const purchaseCost = Number($("#purchaseCost").value);
   const purchaseDate = $("#purchaseDate").value;
 
+  const isConsigned = $("#ownershipType").value === "consigned";
   if (!name ||
-      (existing?.purchaseCostUnknown && !$("#purchaseCost").value.trim()) ||
+      (!isConsigned && (existing?.purchaseCostUnknown && !$("#purchaseCost").value.trim())) ||
       !Number.isFinite(listedPrice) || listedPrice < 0 ||
-      !Number.isFinite(purchaseCost) || purchaseCost < 0) {
+      (!isConsigned && (!Number.isFinite(purchaseCost) || purchaseCost < 0))) {
     message.textContent =
       "Enter a name, valid listed price, purchase cost, and date.";
 
@@ -1938,12 +2036,27 @@ async function saveItemForm(event) {
       id: itemId,
       name,
       sku: $("#itemSku").value.trim(),
+      purchaseSource: $("#purchaseSource").value.trim(),
+      storageLocation: $("#storageLocation").value.trim(),
+      ownershipType: $("#ownershipType").value || "owned",
+      consignmentPercent: Math.max(0, Math.min(100, Number($("#consignmentPercent").value) || 0)),
+      packageWeight: Number($("#packageWeight").value) || 0,
+      packageLength: Number($("#packageLength").value) || 0,
+      packageWidth: Number($("#packageWidth").value) || 0,
+      packageHeight: Number($("#packageHeight").value) || 0,
+      cardGame: isTradingCard({ productCategory: category }) ? $("#cardGame").value : "",
+      cardSet: isTradingCard({ productCategory: category }) ? $("#cardSet").value.trim() : "",
+      cardNumber: isTradingCard({ productCategory: category }) ? $("#cardNumber").value.trim() : "",
+      cardPrinting: isTradingCard({ productCategory: category }) ? $("#cardPrinting").value.trim() : "",
+      cardLanguage: isTradingCard({ productCategory: category }) ? $("#cardLanguage").value.trim() : "",
       productCategory: category,
       listedPrice: Math.round(listedPrice * 100) / 100,
       purchaseCost: Math.round(purchaseCost * 100) / 100,
-      purchaseCostUnknown: false,
+      purchaseCostUnknown: isConsigned ? true : false,
       purchaseCostEstimated: false,
       purchaseDate: purchaseDate || "",
+      listedAt: existing?.listedAt || new Date().toISOString(),
+      priceHistory: [...(existing?.priceHistory || []), ...(existing && Number(existing.listedPrice) !== listedPrice ? [{ price: Number(existing.listedPrice) || 0, date: todayString() }] : [])],
       itemCondition: $("#itemCondition").value,
 
       photo: newPhoto !== null
@@ -1959,11 +2072,18 @@ async function saveItemForm(event) {
       createdAt: existing?.createdAt || new Date().toISOString()
     };
 
+    const marketIdentityChanged = existing && ["name", "productCategory", "cardGame", "cardSet", "cardNumber", "cardPrinting", "cardLanguage", "cardType", "itemCondition", "gradingCompany", "cardGrade"]
+      .some((key) => String(existing[key] || "") !== String(item[key] || ""));
+    if (marketIdentityChanged) {
+      ["marketValue", "marketValueSource", "marketValueUpdatedAt", "marketValueCondition", "marketValuePrinting", "marketValueLanguage", "marketProviderCardId", "marketProviderVariantId", "marketPriceStatus", "marketPriceHistory"]
+        .forEach((key) => { delete item[key]; });
+    }
+
     const index = data.items.findIndex(
       (entry) => entry.id === item.id
     );
 
-    const saleToAllocate = existing?.purchaseCostUnknown
+    const saleToAllocate = (existing?.purchaseCostUnknown || (existing?.ownershipType === "consigned" && existing?.consignmentPercent !== item.consignmentPercent))
       ? getSaleForItem(item.id)
       : null;
     const oldFunds = { ...data.funds };
@@ -1997,6 +2117,12 @@ async function saveItemForm(event) {
     delete form.dataset.editingId;
 
     $("#purchaseDate").value = todayString();
+    $("#purchaseSource").value = "";
+    $("#storageLocation").value = "";
+    $("#ownershipType").value = "owned";
+    $("#consignmentShareGroup").hidden = true;
+    $("#consignmentPercent").value = "50";
+    ["packageWeight", "packageLength", "packageWidth", "packageHeight"].forEach((id) => { $("#" + id).value = ""; });
     $("#itemPhotoPreviewWrap").hidden = true;
     if (itemPhotoPreviewUrl) URL.revokeObjectURL(itemPhotoPreviewUrl);
     itemPhotoPreviewUrl = "";
@@ -2045,12 +2171,26 @@ function startEditingItem(itemId) {
   if (item.purchaseCostUnknown) $("#purchaseCost").value = "";
   $("#purchaseDate").value = item.purchaseDate;
   $("#itemSku").value = item.sku || "";
+  $("#purchaseSource").value = item.purchaseSource || "";
+  $("#storageLocation").value = item.storageLocation || "";
+  $("#ownershipType").value = item.ownershipType || "owned";
+  $("#consignmentPercent").value = item.consignmentPercent ?? 50;
+  $("#consignmentShareGroup").hidden = $("#ownershipType").value !== "consigned";
+  $("#packageWeight").value = item.packageWeight || "";
+  $("#packageLength").value = item.packageLength || "";
+  $("#packageWidth").value = item.packageWidth || "";
+  $("#packageHeight").value = item.packageHeight || "";
 
   $("#itemCondition").value =
     item.itemCondition || "Not specified";
 
   $("#itemNotes").value = item.notes || "";
   $("#cardType").value = item.cardType || "raw";
+  $("#cardGame").value = item.cardGame || (item.productCategory === "pokemon" ? "pokemon" : "other");
+  $("#cardSet").value = item.cardSet || "";
+  $("#cardNumber").value = item.cardNumber || "";
+  $("#cardPrinting").value = item.cardPrinting || "";
+  $("#cardLanguage").value = item.cardLanguage || "";
   $("#gradingCompany").value = item.gradingCompany || "";
   $("#cardGrade").value = item.cardGrade || "";
   $("#certNumber").value = item.certNumber || "";
@@ -2109,6 +2249,7 @@ function openItemDetails(itemId) {
   );
 
   if (isTradingCard(item)) {
+    html += detailBox("Card match", [item.cardGame, item.cardSet, item.cardNumber && `#${item.cardNumber}`, item.cardPrinting, item.cardLanguage].filter(Boolean).join(" · ") || "Add set, number, and printing for accurate pricing");
     html += detailBox(
       "Card status",
       item.cardType === "graded"
@@ -2135,6 +2276,10 @@ function openItemDetails(itemId) {
   }
 
   html += "</div>";
+
+  if (isTradingCard(item) && typeof renderMarketValuePanel === "function") {
+    html += renderMarketValuePanel(item);
+  }
 
   if (item.photo) {
     const embeddedPhoto = item.photo.startsWith("data:");
@@ -2514,7 +2659,7 @@ function markSalePaid(saleId) {
   sale.paidDate = todayString();
   sale.paidAt = new Date().toISOString();
   allocatePaidSaleFunds(sale, item);
-  if (item.purchaseCostUnknown) sale.fundsAllocated = false;
+  if (item.purchaseCostUnknown && item.ownershipType !== "consigned") sale.fundsAllocated = false;
 
   if (!saveData()) {
     data.funds = oldFunds;
