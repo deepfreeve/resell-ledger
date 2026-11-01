@@ -1,0 +1,11 @@
+{
+  "name": "cache-resell-ledger",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public --project-name resell-ledger"
+  },
+  "devDependencies": {
+    "wrangler": "4.156.0"
+  }
+}

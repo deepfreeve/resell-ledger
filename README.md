@@ -18,19 +18,16 @@ Reset account inventory, sales, balances, categories, and stored item photos
 Search and filter available inventory
 Duplicate item details when purchasing multiple copies
 Project files
-index.html — application structure
-style.css — responsive styling
-app.js — inventory, sales, and financial calculations
+public/index.html — application structure
+public/style.css — responsive styling
+public/app.js — inventory, sales, and financial calculations
 Run locally
-Open index.html in a modern browser, or serve the project using a local development server.
+Open public/index.html in a modern browser, or run npm run dev for Pages Functions support.
 Publish with Cloudflare Pages
-Push the project files to a GitHub repository.
-Open the Cloudflare dashboard.
-Navigate to Workers & Pages.
-Create a Pages project and connect the GitHub repository.
-For this plain HTML, CSS, and JavaScript project, leave the build command empty.
-Set the build output directory to / if Cloudflare offers that setting for your deployment.
-Deploy the project and open the generated pages.dev address.
+This repository uses Cloudflare Pages Functions in `functions/` and serves the static site from `public/`.
+In Cloudflare Workers Builds, set the deploy command to `npm run deploy` (or `npx wrangler pages deploy public --project-name resell-ledger`). Keep the build command empty. Do not use `npx wrangler deploy`; that deploys a Worker and does not publish this Pages site and its Functions together.
+For a Pages Git integration, set the build output directory to `public` and leave the build command empty.
+The project name in `package.json` must match the existing Cloudflare Pages project if it is different from `resell-ledger`.
 Data and privacy
 CACHE uses Supabase email and password authentication. Inventory, sales, custom categories, and funds sync to a per-user Supabase record protected by row-level security. A per-account browser cache is also kept for resilience. Existing browser data is imported into the first account that signs in when that account has no cloud record.
 Photos are resized to at most 1280 pixels and compressed as JPEG before upload to a private per-user Supabase Storage bucket. Existing embedded photos move to the bucket at next sign-in. Keep a separate backup of important financial records; CACHE backups include photo files.
