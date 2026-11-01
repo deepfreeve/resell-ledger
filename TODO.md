@@ -12,10 +12,8 @@ Status reflects the current repository. A checkmark means the feature is impleme
 - [x] Sale allocation returns inventory cost, fees, and shipping to reinvestment first, then applies the per-sale slider to remaining profit; same slider is available when recording a sale and marking its payout paid.
 - [x] Inventory source, storage location, owned/consigned tracking, consignment settlement balances, package dimensions, and SKU barcode scanning where supported by the browser/device.
 - [x] Sourcing log and buy-plan calculator.
-- [x] eBay active-listing deal search in easy and advanced modes; saved advanced searches, condition/cost filters, and estimated profit using recorded sales and manual comparisons.
-- [x] Keep the basic deal finder quick (product, condition, maximum all-in cost); expose profit, ROI, comparable-count, shipping, and fee controls in Advanced mode.
 - [x] Remove the Listing Drafts workspace because it did not publish or bulk-list items to eBay. Existing saved draft data remains preserved in account backups.
-- [x] Manual inventory value estimates and sold-price references; the eBay deal finder compares current active listings with these user-owned references and CACHE sales.
+- [x] Manual inventory value estimates and personal sold-price references.
 - [x] Manual price-comparison records; CACHE does not claim restricted eBay sold-comparable access.
 - [x] Fee, shipping, break-even, target-price estimator; weekly/monthly net-profit goals.
 - [x] Offer floor helper that compares an entered offer against break-even and target-profit prices.
@@ -31,7 +29,6 @@ Status reflects the current repository. A checkmark means the feature is impleme
 - [x] Add Capacitor native configuration, pinned platform/CLI dependencies, scripts, and authenticated API support for native origins. Native projects, deep links, native review polish, signing, and device testing remain.
 - [ ] Prepare final privacy/support pages and disclosures, store artwork, signing, and device testing. Track prerequisites in [APP_STORE_READINESS.md](APP_STORE_READINESS.md); store enrollment and legal/support details require the owner.
 - [x] Manual inventory value entry and saved value history.
-- [ ] Set Cloudflare Pages variables/secrets for the eBay Browse deal-search route and obtain eBay Buy API production approval. See README.md.
 - [ ] Verify the latest mobile navigation changes on the live Cloudflare deployment.
 - [ ] Configure a custom domain and add it to Supabase Auth's allowed redirect URLs.
 - [ ] Add sample eBay refund/partial-refund and additional report formats, then extend the CSV parser and preview.
@@ -42,7 +39,7 @@ Status reflects the current repository. A checkmark means the feature is impleme
 
 ## Pro features to validate
 
-- [ ] Add optional current-market value pricing from permitted sources, with match confidence, source, and data freshness visible; keep manual values available if feeds are unavailable. The eBay active-listing deal finder is implemented separately and awaits API configuration/approval above.
+- [ ] Add optional current-market value pricing from permitted sources, with match confidence, source, and data freshness visible; keep manual values available if feeds are unavailable.
 - [ ] Cross-listing workspace and marketplace status synchronization.
 - [ ] Batch price/category edits, printable SKU labels, and duplicate listing batches.
 - [ ] Photo batch editing, background cleanup, and consistent listing images.

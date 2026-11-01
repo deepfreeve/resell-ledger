@@ -50,6 +50,41 @@ const POKEMON_CONDITIONS = [
   "Moderately Played", "Heavily Played", "Damaged"
 ];
 
+const DEFAULT_THEME = { main: "#f5ed00", secondary: "#192126", text: "#f1f3f4" };
+
+function normalizeThemeColor(value, fallback) {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : fallback;
+}
+
+function colorLuminance(hex) {
+  const channels = hex.slice(1).match(/.{2}/g).map((part) => parseInt(part, 16) / 255).map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function colorContrast(first, second) {
+  const values = [colorLuminance(first), colorLuminance(second)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
+function applyThemeSettings(updateControls = true, overrideTheme = null) {
+  const theme = { ...DEFAULT_THEME, ...(overrideTheme || data.settings?.theme || {}) };
+  const root = document.documentElement;
+  root.style.setProperty("--main-color", theme.main);
+  root.style.setProperty("--secondary-color", theme.secondary);
+  root.style.setProperty("--text", theme.text);
+  root.style.setProperty("--muted", theme.text === DEFAULT_THEME.text ? "#9ba8b0" : theme.text);
+  root.style.setProperty("--primary-ink", colorContrast(theme.main, "#000000") >= colorContrast(theme.main, "#ffffff") ? "#000000" : "#ffffff");
+  if (updateControls) {
+    const main = document.querySelector("#themeMainColor");
+    const secondary = document.querySelector("#themeSecondaryColor");
+    const text = document.querySelector("#themeTextColor");
+    if (main) main.value = theme.main;
+    if (secondary) secondary.value = theme.secondary;
+    if (text) text.value = theme.text;
+  }
+}
+
 const $ = (selector) => document.querySelector(selector);
 
 let salesChart = null;
@@ -66,7 +101,6 @@ function createEmptyData() {
     items: [],
     sales: [],
     customCategories: [],
-    dealSearches: [],
     sourcingLog: [],
     priceComps: [],
     listingDrafts: [],
@@ -77,7 +111,7 @@ function createEmptyData() {
     lotPurchases: [],
     shipments: [],
     returnRecords: [],
-    settings: { defaultFeePercent: 13, defaultOutgoingShipping: 6, repricingReviewDays: 30 },
+    settings: { defaultFeePercent: 13, defaultOutgoingShipping: 6, repricingReviewDays: 30, theme: { ...DEFAULT_THEME } },
     funds: {
       capital: 0,
       reinvestment: 0,
@@ -94,7 +128,6 @@ function normalizeData(saved) {
     sales: Array.isArray(saved?.sales) ? saved.sales : [],
     customCategories: Array.isArray(saved?.customCategories)
       ? saved.customCategories : [],
-    dealSearches: Array.isArray(saved?.dealSearches) ? saved.dealSearches : [],
     sourcingLog: Array.isArray(saved?.sourcingLog) ? saved.sourcingLog : [],
     priceComps: Array.isArray(saved?.priceComps) ? saved.priceComps : [],
     listingDrafts: Array.isArray(saved?.listingDrafts) ? saved.listingDrafts : [],
@@ -108,7 +141,12 @@ function normalizeData(saved) {
     settings: {
       defaultFeePercent: Number(saved?.settings?.defaultFeePercent ?? 13),
       defaultOutgoingShipping: Number(saved?.settings?.defaultOutgoingShipping ?? 6),
-      repricingReviewDays: Number(saved?.settings?.repricingReviewDays ?? 30)
+      repricingReviewDays: Number(saved?.settings?.repricingReviewDays ?? 30),
+      theme: {
+        main: normalizeThemeColor(saved?.settings?.theme?.main, DEFAULT_THEME.main),
+        secondary: normalizeThemeColor(saved?.settings?.theme?.secondary, DEFAULT_THEME.secondary),
+        text: normalizeThemeColor(saved?.settings?.theme?.text, DEFAULT_THEME.text)
+      }
     },
     funds: {
       capital: Number(saved?.funds?.capital) || 0,
@@ -140,6 +178,8 @@ function loadData(storageKey = STORAGE_KEY) {
 }
 
 let data = createEmptyData();
+
+applyThemeSettings();
 
 function applyCustomCategoryNames() {
   data.customCategories.forEach((category) => {
@@ -721,6 +761,7 @@ async function restoreBackup(event) {
     for (const draft of restored.listingDrafts || []) draft.photos = await Promise.all((Array.isArray(draft.photos) ? draft.photos : []).map((path) => restorePath(path, draft.id)));
     for (const document of restored.documents || []) document.path = await restorePath(document.path, document.itemId);
     data = restored;
+    applyThemeSettings();
     Object.keys(CATEGORY_NAMES).filter((id) => id.startsWith("custom_")).forEach((id) => delete CATEGORY_NAMES[id]);
     applyCustomCategoryNames();
     updateCategoryOptions();
@@ -1241,9 +1282,11 @@ function renderSalesChart() {
   const context = canvas.getContext("2d");
 
   const gradient = context.createLinearGradient(0, 0, 0, 240);
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--main-color").trim() || "#efff00";
+  const accentRgb = accent.slice(1).match(/.{2}/g).map((part) => parseInt(part, 16)).join(",");
 
-  gradient.addColorStop(0, "rgba(239,255,0,0.28)");
-  gradient.addColorStop(1, "rgba(239,255,0,0.00)");
+  gradient.addColorStop(0, `rgba(${accentRgb},0.28)`);
+  gradient.addColorStop(1, "transparent");
 
   salesChart = new Chart(context, {
     type: "line",
@@ -1255,7 +1298,7 @@ function renderSalesChart() {
         label: "Sales revenue",
         data: values,
 
-        borderColor: "#efff00",
+        borderColor: accent,
         backgroundColor: gradient,
 
         borderWidth: 2.5,
@@ -1266,7 +1309,7 @@ function renderSalesChart() {
         pointRadius: 3,
         pointHoverRadius: 6,
 
-        pointBackgroundColor: "#efff00",
+        pointBackgroundColor: accent,
         pointBorderColor: "#101010",
         pointBorderWidth: 2
       }]
@@ -1284,7 +1327,7 @@ function renderSalesChart() {
         tooltip: {
           backgroundColor: "#242729",
           titleColor: "#ffffff",
-          bodyColor: "#efff00",
+          bodyColor: accent,
           borderColor: "#414447",
           borderWidth: 1,
 
@@ -3012,6 +3055,7 @@ async function loadAccountData(user) {
 
   applyCustomCategoryNames();
   updateCategoryOptions();
+  applyThemeSettings();
   $("#purchaseDate").value = todayString();
   setCardFieldsVisibility();
   renderAll();
@@ -3086,6 +3130,7 @@ async function resetAccountData() {
     if (error) throw error;
 
     data = emptyData;
+    applyThemeSettings();
     for (const key of Object.keys(CATEGORY_NAMES)) {
       if (key.startsWith("custom_")) delete CATEGORY_NAMES[key];
     }

@@ -66,7 +66,6 @@
       <button class="sidebar-link" data-page="add" type="button">
         <span class="nav-icon">＋</span> Add item
       </button>
-      <button class="sidebar-link" data-page="sourcing" type="button"><span class="nav-icon">⌕</span> Sourcing</button>
     </div>
 
     <div class="sidebar-section">
@@ -84,11 +83,13 @@
     <div class="sidebar-section">
       <p class="sidebar-label">MANAGEMENT</p>
 
+      <button class="sidebar-link" data-page="sourcing" type="button"><span class="nav-icon">⌕</span> Sourcing</button>
+
+      <button class="sidebar-link" data-page="business" type="button"><span class="nav-icon">◈</span> Business tools</button>
+
       <button class="sidebar-link" data-page="account" type="button">
         <span class="nav-icon">◉</span> Your account
       </button>
-
-      <button class="sidebar-link" data-page="business" type="button"><span class="nav-icon">◈</span> Business tools</button>
     </div>
 
     <div class="sidebar-bottom">
@@ -440,27 +441,7 @@
 
       <!-- ACCOUNT -->
       <section class="page" id="page-sourcing">
-        <div class="page-heading"><div><p class="eyebrow">BUYING WORKSPACE</p><h1>Sourcing</h1><p class="page-description">Track where you buy, compare your recorded sales, and plan purchases with your own resale estimate.</p></div></div>
-        <section class="panel feature-panel">
-          <div class="panel-heading"><div><p class="eyebrow">EBAY ACTIVE LISTINGS</p><h3>Find a deal</h3></div></div>
-          <p class="field-hint">Search current eBay listings and compare asking prices with your own recorded sales and saved comparisons. eBay active listing prices are not sold prices, so CACHE only estimates profit when it has enough close comparisons.</p>
-          <div class="detail-actions deal-mode-switch" role="group" aria-label="Deal search type"><button class="primary-button" id="easyDealMode" type="button" aria-pressed="true">Easy</button><button class="secondary-button" id="advancedDealMode" type="button" aria-pressed="false">Advanced</button></div>
-          <form id="dealSearchForm" class="feature-form">
-            <label class="field">Card or product name<input name="query" maxlength="100" required placeholder="Charizard 151, PSA 10"></label>
-            <label class="field">Condition<select name="condition"><option value="any">Any condition</option><option>New</option><option>Near Mint</option><option>Lightly Played</option><option>Moderately Played</option><option>Heavily Played</option><option>Damaged</option><option>Graded</option><option>Used</option></select></label>
-            <label class="field">Maximum total cost ($)<input name="maxCost" type="number" min="0" step="0.01" value="25" required></label>
-            <div id="dealAdvancedOptions" class="feature-form full-width" hidden>
-              <label class="field">Minimum expected profit ($)<input name="minProfit" type="number" min="0" step="0.01" value="10"></label>
-              <label class="field">Minimum return on investment (%)<input name="minRoi" type="number" min="0" step="1" value="30"></label>
-              <label class="field">Minimum close sold comparisons<input name="minimumComps" type="number" min="1" max="100" step="1" value="3"></label>
-              <label class="field">Maximum shipping ($)<input name="maxShipping" type="number" min="0" step="0.01" value="8"></label>
-              <label class="field">Estimated platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label>
-            </div>
-            <div class="detail-actions full-width"><button class="primary-button" type="submit">Search eBay</button><button class="secondary-button" id="saveDealSearchButton" type="button" hidden>Save advanced search</button></div>
-          </form>
-          <div id="dealSearchList" class="feature-list"></div>
-          <div id="dealResults" class="deal-results" aria-live="polite"></div>
-        </section>
+        <div class="page-heading"><div><p class="eyebrow">MANAGEMENT</p><h1>Sourcing</h1><p class="page-description">Track your buying sources, keep personal sale-price references, and plan purchases.</p></div></div>
         <div class="dashboard-grid">
           <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PRICE REFERENCE</p><h3>Add a sold comparison</h3></div></div>
             <form id="priceCompForm" class="feature-form"><label class="field">Product<input name="product" required maxlength="120"></label><label class="field">Condition<input name="condition" required maxlength="60" placeholder="Near Mint"></label><label class="field">Sold price ($)<input name="price" type="number" min="0.01" step="0.01" required></label><label class="field">Sold date<input name="soldDate" type="date" required></label><label class="field">Source<input name="source" maxlength="80" placeholder="eBay sold listing"></label><button class="primary-button" type="submit">Save comparison</button></form>
@@ -479,6 +460,18 @@
 
       <section class="page" id="page-business">
         <div class="page-heading"><div><p class="eyebrow">BUSINESS WORKSPACE</p><h1>Business tools</h1><p class="page-description">Price with costs in mind, track grading and goals, manage fulfillment, and keep sales records complete.</p></div></div>
+        <section class="panel ebay-import-panel">
+          <div class="panel-heading"><div><p class="eyebrow">SALES HISTORY</p><h3>Import eBay sales CSV</h3></div></div>
+          <p class="field-hint">Choose an eBay orders/sales CSV or Listings Sales report and review rows before importing. Enter the bought cost and choose what percent of profit is reinvested. Sale costs (purchase cost, eBay fees, shipping, and other costs) are returned to reinvestment first; only profit left after all costs is split. Leave cost blank if unknown. We match by SKU or title, skip duplicates, and ignore buyer details. Listings Sales reports only give a date range, so those sales use the report end date.</p>
+          <div class="form-group"><label for="ebayCsvFile">eBay CSV file</label><input id="ebayCsvFile" type="file" accept=".csv,text/csv"></div>
+          <label class="field ebay-estimate-control" for="ebayEstimatePercent">Estimate bought cost as a percentage of sale price: <span id="ebayEstimateLabel">50%</span>
+            <input id="ebayEstimatePercent" type="range" min="0" max="100" step="1" value="50">
+            <small>Estimated costs are marked clearly and can be edited after import.</small>
+          </label>
+          <div id="ebayImportSummary" class="form-message" role="status" aria-live="polite"></div>
+          <div id="ebayPreview" class="report-table-wrap"></div>
+          <div class="detail-actions"><button class="primary-button" id="importEbayButton" type="button" disabled>Import selected sales</button><button class="secondary-button" id="cancelEbayImportButton" type="button" hidden>Clear preview</button></div>
+        </section>
         <section class="panel feature-panel ebay-active-import-panel">
           <div class="panel-heading"><div><p class="eyebrow">INVENTORY IMPORT</p><h3>Import active eBay listings</h3></div></div>
           <p class="field-hint">Download an All active listings report from eBay Seller Hub Reports, then choose the CSV here. Set an estimated bought cost as a percentage of each listed price, then review and adjust costs before importing. Estimated costs are labeled and can be edited later. This adds inventory only; it does not import sales.</p>
@@ -551,6 +544,18 @@
           <p class="page-description">Your inventory and sales are saved to your private CACHE account.</p>
         </section>
 
+        <section class="panel feature-panel theme-settings-panel" aria-labelledby="themeSettingsHeading">
+          <div class="panel-heading"><div><p class="eyebrow">PERSONALIZE</p><h3 id="themeSettingsHeading">App colors</h3></div></div>
+          <p class="field-hint">Choose your main accent, secondary button color, and text color. Changes are saved to your account and sync to your other devices. Pick a light text color so it stays easy to read on the dark background.</p>
+          <div class="theme-pickers">
+            <label class="field theme-picker">Main color<input id="themeMainColor" type="color" value="#f5ed00"><span>Buttons and highlights</span></label>
+            <label class="field theme-picker">Secondary color<input id="themeSecondaryColor" type="color" value="#192126"><span>Secondary buttons and surfaces</span></label>
+            <label class="field theme-picker">Writing / words<input id="themeTextColor" type="color" value="#f1f3f4"><span>Main app text</span></label>
+          </div>
+          <div class="theme-preview" id="themePreview" aria-live="polite"><strong>Color preview</strong><span>This is how your text and buttons will look.</span><button class="primary-button" type="button" tabindex="-1">Main</button><button class="secondary-button" type="button" tabindex="-1">Secondary</button></div>
+          <p class="form-message" id="themeSettingsMessage" role="status" aria-live="polite"></p>
+        </section>
+
         <section class="panel account-reset-panel">
           <div class="panel-heading">
             <div>
@@ -581,29 +586,6 @@
           <p class="field-hint">You can also start deletion from <a href="/delete-account.html">the account deletion page</a>.</p>
         </section>
 
-        <section class="panel ebay-import-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">SALES HISTORY</p>
-              <h3>Import eBay sales CSV</h3>
-            </div>
-          </div>
-          <p class="field-hint">Choose an eBay orders/sales CSV or Listings Sales report and review rows before importing. Enter the bought cost and choose what percent of profit is reinvested. Sale costs (purchase cost, eBay fees, shipping, and other costs) are returned to reinvestment first; only profit left after all costs is split. Leave cost blank if unknown. We match by SKU or title, skip duplicates, and ignore buyer details. Listings Sales reports only give a date range, so those sales use the report end date.</p>
-          <div class="form-group">
-            <label for="ebayCsvFile">eBay CSV file</label>
-            <input id="ebayCsvFile" type="file" accept=".csv,text/csv">
-          </div>
-          <label class="field ebay-estimate-control" for="ebayEstimatePercent">Estimate bought cost as a percentage of sale price: <span id="ebayEstimateLabel">50%</span>
-            <input id="ebayEstimatePercent" type="range" min="0" max="100" step="1" value="50">
-            <small>Estimated costs are marked clearly and can be edited after import.</small>
-          </label>
-          <div id="ebayImportSummary" class="form-message" role="status" aria-live="polite"></div>
-          <div id="ebayPreview" class="report-table-wrap"></div>
-          <div class="detail-actions">
-            <button class="primary-button" id="importEbayButton" type="button" disabled>Import selected sales</button>
-            <button class="secondary-button" id="cancelEbayImportButton" type="button" hidden>Clear preview</button>
-          </div>
-        </section>
       </section>
 
       <!-- INVENTORY -->

@@ -14,16 +14,15 @@ When you create an account, CACHE processes your email address and authenticatio
 
 If you use CACHE, the information you enter may include product names, categories, purchase costs and dates, sale prices and dates, marketplace fees, shipping costs, notes, balances, imported sales rows, and private product or receipt images. These records sync to your CACHE account in Supabase. CACHE also keeps an account-specific copy in the browser's local storage for resilience. Anyone with access to an unlocked browser profile may be able to access that local copy.
 
-Image OCR for sale screenshots runs in your browser. When you search eBay deals, your search terms are sent to eBay through CACHE's server. CACHE retrieves active listing information only; it does not retrieve eBay sold prices. Optional services are used only when their feature is enabled and you choose to use it. Their own privacy and retention terms also apply.
+Image OCR for sale screenshots and eBay CSV parsing run in your browser. Imported rows are saved to your account only when you confirm the import. Optional services are used only when their feature is enabled and you choose to use it. Their own privacy and retention terms also apply.
 
 When you import an eBay CSV, CACHE parses it in your browser. Imported rows are saved to your account only when you confirm the import. CACHE's import flow is designed to ignore buyer details. Backups and exports are generated for you to download; those downloaded files are under your control.
 
 ## Providers and purposes
 
 - **Supabase:** account sign-in, cloud database, and private photo/document storage.
-- **Cloudflare:** website hosting and server-side feature requests.
+- **Cloudflare:** website hosting and delivery.
 - **jsDelivr:** delivery of third-party browser libraries currently referenced by the site.
-- **eBay:** optional active listing search, only when configured and used.
 
 The services may process technical information such as IP address, browser/device details, request time, and security logs to provide, secure, and troubleshoot their services. Review each provider's current privacy terms before publishing this policy.
 
