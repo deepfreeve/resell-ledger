@@ -57,6 +57,25 @@ function renderSourcingLists() {
   }).join("") : '<p class="muted-text">Save a buy plan to compare estimated margin before purchasing.</p>';
 }
 
+function renderBankLedgers() {
+  const accounts = [
+    { key: "personal", prefix: "personalBank" },
+    { key: "business", prefix: "businessBank" }
+  ];
+  for (const { key, prefix } of accounts) {
+    const entries = data.bankLedger[key] || [];
+    const totalIn = featureRound(entries.filter((entry) => entry.type === "in").reduce((sum, entry) => sum + featureNum(entry.amount), 0));
+    const totalOut = featureRound(entries.filter((entry) => entry.type === "out").reduce((sum, entry) => sum + featureNum(entry.amount), 0));
+    const balance = featureRound(totalIn - totalOut);
+    $(`#${prefix}Balance`).textContent = money(balance);
+    $(`#${prefix}InTotal`).textContent = money(totalIn);
+    $(`#${prefix}OutTotal`).textContent = money(totalOut);
+    $(`#${prefix}NetTotal`).textContent = money(balance);
+    const rows = $(`#${prefix}Rows`);
+    rows.innerHTML = entries.length ? [...entries].sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt).localeCompare(String(a.createdAt))).map((entry) => `<tr><td>${featureEsc(formatDate(entry.date))}</td><td>${featureEsc(entry.description || (entry.type === "in" ? "Deposit" : "Spending"))}</td><td>${entry.type === "in" ? money(entry.amount) : "—"}</td><td>${entry.type === "out" ? money(entry.amount) : "—"}</td><td>${entry.sourceType === "manual" ? `<button class="danger-button bank-delete-button" type="button" data-bank-delete="${featureEsc(entry.id)}" data-bank-account="${key}" aria-label="Remove ${featureEsc(key)} bank entry">Remove</button>` : '<span class="bank-auto-entry" title="Linked to a sale, refund, or inventory purchase">Auto</span>'}</td></tr>`).join("") : '<tr><td colspan="5" class="bank-empty">No bank entries yet. Add a deposit or spending entry below.</td></tr>';
+  }
+}
+
 function renderBusinessTools() {
   const options = (items, labelFn, placeholder) => [`<option value="">${featureEsc(placeholder)}</option>`, ...items.map((item) => `<option value="${featureEsc(item.id)}">${featureEsc(labelFn(item))}</option>`)].join("");
   const unsold = data.items.filter((item) => !getSaleForItem(item.id));
@@ -418,8 +437,11 @@ function updateFeeEstimator() {
 
 function renderWorkspace() {
   renderSourcingLists();
+  renderBankLedgers();
   renderBusinessTools();
 }
+
+document.querySelectorAll("[data-bank-date]").forEach((input) => { input.value = featureDate(); });
 
 $("#priceCompForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -486,16 +508,9 @@ $("#shipmentForm").addEventListener("submit", (event) => {
 
 function reverseSaleAllocation(sale, item) {
   if (!sale?.fundsAllocated) return;
-  const legacyRecovered = sale.allocationVersion ? 0 : featureNum(sale.capitalRecovered);
-  data.funds.reinvestment = featureRound(featureNum(data.funds.reinvestment) - featureNum(sale.reinvestmentAdded) - legacyRecovered);
-  data.funds.personal = featureRound(featureNum(data.funds.personal) - featureNum(sale.personalAdded));
   data.funds.consignmentOwed = featureRound(featureNum(data.funds.consignmentOwed) - featureNum(sale.consignmentOwed));
-  if (data.funds.reinvestment < 0.005) data.funds.reinvestment = 0;
-  if (data.funds.personal < 0.005) data.funds.personal = 0;
   if (data.funds.consignmentOwed < 0.005) data.funds.consignmentOwed = 0;
   sale.fundsAllocated = false;
-  sale.reinvestmentAdded = 0;
-  sale.personalAdded = 0;
   sale.consignmentOwed = 0;
 }
 
@@ -520,7 +535,9 @@ $("#returnForm").addEventListener("submit", (event) => {
   } else {
     allocatePaidSaleFunds(sale, item);
   }
-  data.returnRecords.unshift({ id: featureId(), saleId: sale.id, amount, date: values.date, returned, notes: String(values.notes || "").trim(), fullRefund: isFullRefund, createdAt: new Date().toISOString() });
+  const refundRecord = { id: featureId(), saleId: sale.id, amount, date: values.date, returned, notes: String(values.notes || "").trim(), fullRefund: isFullRefund, createdAt: new Date().toISOString() };
+  data.returnRecords.unshift(refundRecord);
+  addBankEntry("business", { type: "out", amount, date: values.date, description: `Sale refund · ${featureItemName(sale.itemId)}`, sourceType: "refund", sourceId: refundRecord.id });
   event.currentTarget.reset();
   event.currentTarget.elements.date.value = featureDate();
   featurePersist();
@@ -557,30 +574,58 @@ $("#bundleSaleForm").addEventListener("submit", (event) => {
   featureToast(`Bundle sale recorded across ${items.length} items. Mark each payout paid after it clears.`);
 });
 
+function updateLotBankControls(resetDefaultAmount = false) {
+  const source = $("#lotPaymentSource");
+  const group = $("#lotBankAmountGroup");
+  const amount = $("#lotBankAmount");
+  if (!source || !group || !amount) return;
+  const businessPayment = source.value === "business";
+  group.hidden = !businessPayment;
+  amount.required = businessPayment;
+  if (resetDefaultAmount) delete amount.dataset.manualAmount;
+  if (businessPayment && !amount.dataset.manualAmount) amount.value = $("#lotTotalCost").value;
+}
+
 function distributeCostLot(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const values = featureFormData(form);
+  const bankAmount = Number(values.bankAmount || values.cost);
+  if (values.paymentSource === "business" && (!Number.isFinite(bankAmount) || bankAmount <= 0)) return featureToast("Enter the amount paid from the business bank.");
   const itemIds = [...form.querySelectorAll('input[name="itemIds"]:checked')].map((input) => input.value);
   const items = itemIds.map((id) => data.items.find((item) => item.id === id)).filter(Boolean);
   if (!items.length) return featureToast("Choose the items included in this lot.");
+  const previousData = JSON.stringify(data);
   const weights = items.map((item) => values.method === "listed" ? Math.max(0.01, featureNum(item.listedPrice)) : 1);
   const allocations = splitMoneyByWeight(featureNum(values.cost), weights);
   const allocationRows = [];
+  const lotId = featureId();
+  const lotDate = featureDate();
   items.forEach((item, index) => {
     const amount = allocations[index];
     item.purchaseCost = featureRound(featureNum(item.purchaseCost) + amount);
     item.purchaseCostUnknown = false;
     item.purchaseCostEstimated = false;
-    item.costLotId = featureId();
-    item.costBasisNotes = (item.costBasisNotes || []).concat([{ amount, lotName: String(values.name).trim(), method: values.method, date: featureDate() }]);
+    item.costLotId = lotId;
+    item.costBasisNotes = (item.costBasisNotes || []).concat([{ amount, lotName: String(values.name).trim(), method: values.method, date: lotDate }]);
     allocationRows.push({ itemId: item.id, amount });
   });
-  data.lotPurchases.unshift({ id: featureId(), name: String(values.name).trim(), cost: featureRound(featureNum(values.cost)), method: values.method === "listed" ? "By listed value" : "Even split", date: featureDate(), allocations: allocationRows });
+  data.lotPurchases.unshift({ id: lotId, name: String(values.name).trim(), cost: featureRound(featureNum(values.cost)), method: values.method === "listed" ? "By listed value" : "Even split", date: lotDate, allocations: allocationRows });
+  if (values.paymentSource === "business") addBankEntry("business", { type: "out", amount: bankAmount, date: lotDate, description: `Mixed lot purchase · ${String(values.name).trim()}`, sourceType: "purchase", sourceId: lotId });
   form.reset();
-  featurePersist();
+  updateLotBankControls(true);
+  try { featurePersist(); }
+  catch (error) {
+    data = normalizeData(JSON.parse(previousData));
+    renderWorkspace();
+    return featureToast(error.message || "Could not save the lot purchase.");
+  }
 }
 $("#lotSplitForm").addEventListener("submit", distributeCostLot);
+$("#lotPaymentSource").addEventListener("change", () => updateLotBankControls(true));
+$("#lotTotalCost").addEventListener("input", () => updateLotBankControls());
+$("#lotBankAmount").addEventListener("input", (event) => { event.currentTarget.dataset.manualAmount = "true"; });
+updateLotBankControls(true);
 
 $("#repricingDays").addEventListener("change", (event) => {
   data.settings.repricingReviewDays = Math.max(1, Math.min(365, featureNum(event.currentTarget.value) || 30));
@@ -685,6 +730,14 @@ $("#documentForm").elements.itemId.addEventListener("focus", () => {
 
 document.addEventListener("click", async (event) => {
   const target = event.target;
+  const bankDelete = target.closest("[data-bank-delete]");
+  if (bankDelete) {
+    const account = bankDelete.dataset.bankAccount;
+    const linkedEntry = data.bankLedger[account].find((entry) => entry.id === bankDelete.dataset.bankDelete);
+    if (!linkedEntry || linkedEntry.sourceType !== "manual") return featureToast("This entry is linked to an inventory or sale record and updates automatically.");
+    data.bankLedger[account] = data.bankLedger[account].filter((entry) => entry.id !== bankDelete.dataset.bankDelete);
+    return featurePersist();
+  }
   const deleteComp = target.closest("[data-delete-comp]");
   if (deleteComp) { data.priceComps = data.priceComps.filter((entry) => entry.id !== deleteComp.dataset.deleteComp); return featurePersist(); }
   const deleteSource = target.closest("[data-delete-source]");
@@ -705,7 +758,7 @@ document.addEventListener("click", async (event) => {
   const settle = target.closest("[data-settle-consignment]");
   if (settle) {
     const sale = data.sales.find((entry) => entry.id === settle.dataset.settleConsignment);
-    if (sale && !sale.consignmentSettled) { data.funds.consignmentOwed = featureRound(Math.max(0, featureNum(data.funds.consignmentOwed) - featureNum(sale.consignmentOwed))); sale.consignmentSettled = true; sale.consignmentSettledAt = new Date().toISOString(); featurePersist(); }
+    if (sale && !sale.consignmentSettled) { data.funds.consignmentOwed = featureRound(Math.max(0, featureNum(data.funds.consignmentOwed) - featureNum(sale.consignmentOwed))); sale.consignmentSettled = true; sale.consignmentSettledAt = new Date().toISOString(); addBankEntry("business", { type: "out", amount: sale.consignmentOwed, date: featureDate(), description: `Consignment payout · ${featureItemName(sale.itemId)}`, sourceType: "consignment_payment", sourceId: sale.id }); featurePersist(); }
     return;
   }
   const documentOpen = target.closest("[data-open-document]");
@@ -742,6 +795,18 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("submit", (event) => {
+  const bankForm = event.target.closest("[data-bank-form]");
+  if (bankForm) {
+    event.preventDefault();
+    const values = featureFormData(bankForm);
+    const account = bankForm.dataset.bankForm;
+    const amount = Number(values.amount);
+    if (!data.bankLedger[account] || !Number.isFinite(amount) || amount <= 0 || !values.date) return featureToast("Enter a valid amount and date for this bank entry.");
+    data.bankLedger[account].unshift({ id: featureId(), type: values.type === "out" ? "out" : "in", amount: featureRound(amount), date: values.date, description: String(values.description || "").trim().slice(0, 160), sourceType: "manual", sourceId: "", createdAt: new Date().toISOString() });
+    bankForm.reset();
+    bankForm.elements.date.value = featureDate();
+    return featurePersist();
+  }
   const form = event.target.closest("[data-market-manual]");
   if (!form) return;
   event.preventDefault();

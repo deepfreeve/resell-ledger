@@ -111,13 +111,9 @@ function createEmptyData() {
     lotPurchases: [],
     shipments: [],
     returnRecords: [],
+    bankLedger: { personal: [], business: [] },
     settings: { defaultFeePercent: 13, defaultOutgoingShipping: 6, repricingReviewDays: 30, theme: { ...DEFAULT_THEME } },
-    funds: {
-      capital: 0,
-      reinvestment: 0,
-      personal: 0,
-      consignmentOwed: 0
-    }
+    funds: { consignmentOwed: 0 }
   };
 }
 
@@ -138,6 +134,10 @@ function normalizeData(saved) {
     lotPurchases: Array.isArray(saved?.lotPurchases) ? saved.lotPurchases : [],
     shipments: Array.isArray(saved?.shipments) ? saved.shipments : [],
     returnRecords: Array.isArray(saved?.returnRecords) ? saved.returnRecords : [],
+    bankLedger: {
+      personal: normalizeBankEntries(saved?.bankLedger?.personal),
+      business: normalizeBankEntries(saved?.bankLedger?.business)
+    },
     settings: {
       defaultFeePercent: Number(saved?.settings?.defaultFeePercent ?? 13),
       defaultOutgoingShipping: Number(saved?.settings?.defaultOutgoingShipping ?? 6),
@@ -149,19 +149,32 @@ function normalizeData(saved) {
       }
     },
     funds: {
-      capital: Number(saved?.funds?.capital) || 0,
-      reinvestment: Number(saved?.funds?.reinvestment) || 0,
-      personal: Number(saved?.funds?.personal) || 0,
       consignmentOwed: Number(saved?.funds?.consignmentOwed) || 0
     }
   };
-  if (normalized.accountingVersion < 2) {
-    normalized.funds.reinvestment += normalized.funds.capital;
-    normalized.funds.capital = 0;
-    normalized.accountingVersion = 2;
-  }
+  normalized.sales = normalized.sales.map((sale) => {
+    if (sale?.status === "paid" && sale.bankPayoutPosted == null && sale.bankSplitPosted == null) {
+      // Do not invent historical bank activity for sales that predate bank tracking.
+      return { ...sale, bankPayoutPosted: true, bankSplitPosted: true };
+    }
+    return sale;
+  });
   normalized.accountingVersion = Math.max(normalized.accountingVersion, 3);
   return normalized;
+}
+
+function normalizeBankEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter((entry) => entry && typeof entry === "object").slice(0, 5000).map((entry) => ({
+    id: String(entry.id || makeId()).slice(0, 100),
+    type: entry.type === "out" ? "out" : "in",
+    amount: Number.isFinite(Number(entry.amount)) && Number(entry.amount) > 0 ? Math.round(Number(entry.amount) * 100) / 100 : 0,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || "")) ? String(entry.date) : todayString(),
+    description: String(entry.description || "").slice(0, 160),
+    sourceType: ["sale_payout", "sale_split", "purchase", "refund", "consignment_payment"].includes(entry.sourceType) ? entry.sourceType : "manual",
+    sourceId: String(entry.sourceId || "").slice(0, 100),
+    createdAt: String(entry.createdAt || "")
+  })).filter((entry) => entry.amount > 0);
 }
 
 function loadData(storageKey = STORAGE_KEY) {
@@ -341,17 +354,19 @@ function saleCostBreakdown(sale, item) {
   const shipping = Number(sale.shipping) || 0;
   const other = Number(sale.otherCosts) || 0;
   const net = netProceeds(sale);
-  const reinvestmentFirst = Math.round(Math.max(0, Math.min(net, purchase + fees + shipping + other)) * 100) / 100;
-  const profit = Math.round(Math.max(0, net - purchase - fees - shipping - other) * 100) / 100;
+  // netProceeds already subtracts marketplace fees, shipping, and other sale costs.
+  // Recover the item's bought cost from that net payout, then split only the profit.
+  const businessCostRecovery = Math.round(Math.max(0, Math.min(net, purchase)) * 100) / 100;
+  const profit = Math.round(Math.max(0, net - purchase) * 100) / 100;
   const configuredPercent = Number(sale.reinvestmentPercent);
-  const reinvestmentPercent = sale.reinvestmentPercent == null || sale.reinvestmentPercent === "" || !Number.isFinite(configuredPercent)
+  const businessPercent = sale.reinvestmentPercent == null || sale.reinvestmentPercent === "" || !Number.isFinite(configuredPercent)
     ? 50 : Math.max(0, Math.min(100, configuredPercent));
-  const profitReinvestment = Math.round(profit * reinvestmentPercent) / 100;
+  const businessProfit = Math.round(profit * businessPercent) / 100;
   return {
-    purchase, fees, shipping, other, net, reinvestmentFirst, profit,
-    reinvestmentPercent,
-    reinvestmentAdded: Math.round((reinvestmentFirst + profitReinvestment) * 100) / 100,
-    personalAdded: Math.round((profit - profitReinvestment) * 100) / 100
+    purchase, fees, shipping, other, net, businessCostRecovery, profit,
+    businessPercent,
+    businessBankShare: Math.round((businessCostRecovery + businessProfit) * 100) / 100,
+    personalBankShare: Math.round((profit - businessProfit) * 100) / 100
   };
 }
 
@@ -361,32 +376,71 @@ function allocatePaidSaleFunds(sale, item) {
     const ownerShare = Math.max(0, Math.min(100, Number(item.consignmentPercent ?? 50))) / 100;
     const net = Math.max(0, netProceeds(sale));
     const owed = Math.round(net * ownerShare * 100) / 100;
-    const sellerNet = Math.round((net - owed) * 100) / 100;
     const percent = Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)));
-    const reinvestment = Math.round(sellerNet * percent) / 100;
-    const personal = Math.round((sellerNet - reinvestment) * 100) / 100;
     data.funds.consignmentOwed = (Number(data.funds.consignmentOwed) || 0) + owed;
-    data.funds.reinvestment += reinvestment;
-    data.funds.personal += personal;
     sale.consignmentOwed = owed;
     sale.capitalRecovered = 0;
     sale.reinvestmentPercent = percent;
-    sale.reinvestmentAdded = reinvestment;
-    sale.personalAdded = personal;
     sale.allocationVersion = 3;
     sale.fundsAllocated = true;
     return;
   }
   if (item.purchaseCostUnknown) return;
   const allocation = saleCostBreakdown(sale, item);
-  data.funds.reinvestment += allocation.reinvestmentAdded;
-  data.funds.personal += allocation.personalAdded;
-  sale.capitalRecovered = allocation.reinvestmentFirst;
-  sale.reinvestmentPercent = allocation.reinvestmentPercent;
-  sale.reinvestmentAdded = allocation.reinvestmentAdded;
-  sale.personalAdded = allocation.personalAdded;
+  sale.capitalRecovered = allocation.businessCostRecovery;
+  sale.reinvestmentPercent = allocation.businessPercent;
   sale.allocationVersion = 2;
   sale.fundsAllocated = true;
+}
+
+function addBankEntry(account, entry) {
+  if (!data.bankLedger?.[account] || !(Number(entry.amount) > 0)) return null;
+  const bankEntry = {
+    id: makeId(),
+    type: entry.type === "out" ? "out" : "in",
+    amount: Math.round(Number(entry.amount) * 100) / 100,
+    date: entry.date || todayString(),
+    description: String(entry.description || "").slice(0, 160),
+    sourceType: entry.sourceType || "manual",
+    sourceId: String(entry.sourceId || ""),
+    createdAt: new Date().toISOString()
+  };
+  data.bankLedger[account].unshift(bankEntry);
+  return bankEntry;
+}
+
+function syncPaidSaleBankEntries(sale, item) {
+  if (!sale || sale.status !== "paid" || !item) return;
+  const date = sale.paidDate || sale.saleDate || todayString();
+  if (!sale.bankPayoutPosted) {
+    const payout = Math.round(netProceeds(sale) * 100) / 100;
+    addBankEntry("business", {
+      type: payout < 0 ? "out" : "in",
+      amount: Math.abs(payout),
+      date,
+      description: `Sale payout · ${item.name}`,
+      sourceType: "sale_payout",
+      sourceId: sale.id
+    });
+    sale.bankPayoutPosted = true;
+  }
+  if (sale.bankSplitPosted) return;
+
+  let personalShare = 0;
+  if (item.ownershipType === "consigned") {
+    const sellerNet = Math.max(0, netProceeds(sale) - Number(sale.consignmentOwed || 0));
+    personalShare = Math.round(sellerNet * (100 - Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))) / 100 * 100) / 100;
+  } else if (!item.purchaseCostUnknown && !item.purchaseCostEstimated) {
+    personalShare = saleCostBreakdown(sale, item).personalBankShare;
+  } else {
+    return;
+  }
+
+  if (personalShare > 0) {
+    addBankEntry("business", { type: "out", amount: personalShare, date, description: `Profit moved to personal · ${item.name}`, sourceType: "sale_split", sourceId: sale.id });
+    addBankEntry("personal", { type: "in", amount: personalShare, date, description: `Sale profit · ${item.name}`, sourceType: "sale_split", sourceId: sale.id });
+  }
+  sale.bankSplitPosted = true;
 }
 
 /* =========================================
@@ -552,8 +606,6 @@ function updateDashboard() {
   );
 
   $("#capitalValue").textContent = money(lifetimeInventorySpend);
-  $("#reinvestmentValue").textContent = money(data.funds.reinvestment);
-  $("#personalValue").textContent = money(data.funds.personal);
   $("#pendingValue").textContent = money(pendingTotal());
   $("#lifetimeProfitValue").textContent = money(lifetimeProfit());
 
@@ -1046,7 +1098,7 @@ function renderEbayPreview() {
   $("#ebayPreview").innerHTML = rows.length ? `
     <table class="report-table ebay-preview-table">
       <thead><tr><th><input type="checkbox" data-ebay-select-all aria-label="Select importable rows" ${selectable.length && selected === selectable.length ? "checked" : ""} ${selectable.length ? "" : "disabled"}></th><th>Item</th><th>Sale date</th><th>Price</th><th>Bought cost</th><th>Estimated profit</th><th>Fees</th><th>Shipping cost</th><th>Profit split</th><th>Import action</th></tr></thead>
-      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" placeholder="Bought cost" aria-label="Bought cost for ${escapeHtml(row.title)}" data-ebay-cost="${index}" value="${hasCost(row) ? escapeHtml(row.purchaseCost) : ""}" ${row.state === "ready" ? "" : "disabled"}>${row.purchaseCostEstimated ? `<small class="import-sku">Estimated · ${$("#ebayEstimatePercent").value}%</small>` : ""}</td><td>${row.purchaseCostUnknown ? "—" : money(Number(row.price || 0) - Number(row.purchaseCost || 0) - Number(row.fees || 0) - Number(row.shipping || 0))}${row.purchaseCostEstimated ? '<small class="import-sku">Estimate</small>' : ""}</td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td><div class="ebay-split-control"><input type="range" min="0" max="100" step="1" aria-label="Reinvestment percentage for ${escapeHtml(row.title)}" data-ebay-percent="${index}" value="${row.reinvestmentPercent ?? 50}" ${row.state === "ready" ? "" : "disabled"}><small data-ebay-percent-label="${index}">${row.reinvestmentPercent ?? 50}% reinvest · ${100 - (row.reinvestmentPercent ?? 50)}% personal</small></div></td><td data-ebay-action-label="${index}">${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
+      <tbody>${rows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-row="${index}" aria-label="Select ${escapeHtml(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${escapeHtml(row.title)}${row.sku ? `<small class="import-sku">SKU ${escapeHtml(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay listing ${escapeHtml(row.listingId)}</small>` : ""}${row.unitCount > 1 ? `<small class="import-sku">Copy ${row.unitIndex} of ${row.unitCount}</small>` : ""}</td><td>${escapeHtml(row.date || "—")}${row.dateEstimated ? '<small class="import-sku">Report end date</small>' : ""}</td><td>${row.price === null ? "—" : money(row.price)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" placeholder="Bought cost" aria-label="Bought cost for ${escapeHtml(row.title)}" data-ebay-cost="${index}" value="${hasCost(row) ? escapeHtml(row.purchaseCost) : ""}" ${row.state === "ready" ? "" : "disabled"}>${row.purchaseCostEstimated ? `<small class="import-sku">Estimated · ${$("#ebayEstimatePercent").value}%</small>` : ""}</td><td>${row.purchaseCostUnknown ? "—" : money(Number(row.price || 0) - Number(row.purchaseCost || 0) - Number(row.fees || 0) - Number(row.shipping || 0))}${row.purchaseCostEstimated ? '<small class="import-sku">Estimate</small>' : ""}</td><td>${money(row.fees)}</td><td>${money(row.shipping)}</td><td><div class="ebay-split-control"><input type="range" min="0" max="100" step="1" aria-label="Business bank share of profit for ${escapeHtml(row.title)}" data-ebay-percent="${index}" value="${row.reinvestmentPercent ?? 50}" ${row.state === "ready" ? "" : "disabled"}><small data-ebay-percent-label="${index}">${row.reinvestmentPercent ?? 50}% business · ${100 - (row.reinvestmentPercent ?? 50)}% personal</small></div></td><td data-ebay-action-label="${index}">${escapeHtml(stateLabel(row))}</td></tr>`).join("")}</tbody>
     </table>` : "";
   const skipped = rows.length - selectable.length;
   const dateNote = rows.some((row) => row.dateEstimated)
@@ -1103,7 +1155,7 @@ function updateEbayPreviewInputs(event) {
   if (target.matches("[data-ebay-percent]")) {
     row.reinvestmentPercent = Math.max(0, Math.min(100, Number(target.value) || 0));
     const label = $("#ebayPreview").querySelector(`[data-ebay-percent-label="${rowIndex}"]`);
-    if (label) label.textContent = `${row.reinvestmentPercent}% reinvest · ${100 - row.reinvestmentPercent}% personal`;
+    if (label) label.textContent = `${row.reinvestmentPercent}% business · ${100 - row.reinvestmentPercent}% personal`;
   }
 }
 
@@ -1192,6 +1244,7 @@ function importSelectedEbaySales() {
         allocatePaidSaleFunds(sale, item);
       }
       data.sales.push(sale);
+      if (sale.status === "paid") syncPaidSaleBankEntries(sale, item);
       row.state = "imported";
       row.include = false;
     }
@@ -2039,6 +2092,24 @@ async function retryPhotoLoad(path) {
    ADD AND EDIT ITEMS
 ========================================= */
 
+function updatePurchasePaymentControls(resetDefaultAmount = false) {
+  const form = $("#itemForm");
+  const section = $("#purchasePaymentSection");
+  const hint = $("#purchasePaymentHint");
+  const source = $("#purchasePaymentSource");
+  const amountGroup = $("#businessPurchaseAmountGroup");
+  const amount = $("#businessPurchaseAmount");
+  if (!form || !section || !source || !amountGroup || !amount) return;
+  const enabled = !form.dataset.editingId && $("#ownershipType").value !== "consigned";
+  section.hidden = !enabled;
+  if (hint) hint.hidden = !enabled;
+  const businessPayment = enabled && source.value === "business";
+  amountGroup.hidden = !businessPayment;
+  amount.required = businessPayment;
+  if (resetDefaultAmount) delete amount.dataset.manualAmount;
+  if (businessPayment && !amount.dataset.manualAmount) amount.value = $("#purchaseCost").value;
+}
+
 async function saveItemForm(event) {
   event.preventDefault();
 
@@ -2061,10 +2132,13 @@ async function saveItemForm(event) {
   const purchaseDate = $("#purchaseDate").value;
 
   const isConsigned = $("#ownershipType").value === "consigned";
+  const paymentSource = $("#purchasePaymentSource").value;
+  const bankPurchaseAmount = Number($("#businessPurchaseAmount").value || purchaseCost);
   if (!name ||
       (!isConsigned && (existing?.purchaseCostUnknown && !$("#purchaseCost").value.trim())) ||
       !Number.isFinite(listedPrice) || listedPrice < 0 ||
-      (!isConsigned && (!Number.isFinite(purchaseCost) || purchaseCost < 0))) {
+      (!isConsigned && (!Number.isFinite(purchaseCost) || purchaseCost < 0)) ||
+      (!existing && !isConsigned && paymentSource === "business" && (!Number.isFinite(bankPurchaseAmount) || bankPurchaseAmount <= 0))) {
     message.textContent =
       "Enter a name, valid listed price, purchase cost, and date.";
 
@@ -2115,7 +2189,7 @@ async function saveItemForm(event) {
       listedPrice: Math.round(listedPrice * 100) / 100,
       purchaseCost: Math.round(purchaseCost * 100) / 100,
       purchaseCostUnknown: isConsigned ? true : false,
-      purchaseCostEstimated: false,
+      purchaseCostEstimated: Boolean(existing?.purchaseCostEstimated) && Math.round(Number(existing?.purchaseCost || 0) * 100) === Math.round(purchaseCost * 100),
       purchaseDate: purchaseDate || "",
       listedAt: existing?.listedAt || new Date().toISOString(),
       priceHistory: [...(existing?.priceHistory || []), ...(existing && Number(existing.listedPrice) !== listedPrice ? [{ price: Number(existing.listedPrice) || 0, date: todayString() }] : [])],
@@ -2145,11 +2219,13 @@ async function saveItemForm(event) {
       (entry) => entry.id === item.id
     );
 
-    const saleToAllocate = (existing?.purchaseCostUnknown || (existing?.ownershipType === "consigned" && existing?.consignmentPercent !== item.consignmentPercent))
+    const saleToAllocate = (existing?.purchaseCostUnknown || (existing?.purchaseCostEstimated && Math.round(Number(existing.purchaseCost || 0) * 100) !== Math.round(purchaseCost * 100)) || (existing?.ownershipType === "consigned" && existing?.consignmentPercent !== item.consignmentPercent))
       ? getSaleForItem(item.id)
       : null;
     const oldFunds = { ...data.funds };
-    const oldSale = saleToAllocate ? { ...saleToAllocate } : null;
+    const oldBankLedger = JSON.parse(JSON.stringify(data.bankLedger));
+    const paidSale = existing && data.sales.find((sale) => sale.itemId === item.id && sale.status === "paid");
+    const oldSale = paidSale ? { ...paidSale } : (saleToAllocate ? { ...saleToAllocate } : null);
 
     if (index >= 0) {
       data.items[index] = item;
@@ -2157,9 +2233,14 @@ async function saveItemForm(event) {
       data.items.push(item);
     }
 
+    const purchaseBankEntry = !existing && !isConsigned && paymentSource === "business"
+      ? addBankEntry("business", { type: "out", amount: bankPurchaseAmount, date: purchaseDate || todayString(), description: `Inventory purchase · ${name}`, sourceType: "purchase", sourceId: item.id })
+      : null;
+
     if (saleToAllocate?.status === "paid" && saleToAllocate.fundsAllocated === false) {
       allocatePaidSaleFunds(saleToAllocate, item);
     }
+    if (paidSale) syncPaidSaleBankEntries(paidSale, item);
 
     if (!saveData()) {
       if (existing && index >= 0) {
@@ -2170,13 +2251,18 @@ async function saveItemForm(event) {
         );
       }
       data.funds = oldFunds;
-      if (saleToAllocate && oldSale) Object.assign(saleToAllocate, oldSale);
+      data.bankLedger = oldBankLedger;
+      if (saleToAllocate && oldSale) {
+        Object.keys(saleToAllocate).forEach((key) => { if (!(key in oldSale)) delete saleToAllocate[key]; });
+        Object.assign(saleToAllocate, oldSale);
+      }
 
       return;
     }
 
     form.reset();
     delete form.dataset.editingId;
+    updatePurchasePaymentControls(true);
 
     $("#purchaseDate").value = todayString();
     $("#purchaseSource").value = "";
@@ -2220,6 +2306,7 @@ function startEditingItem(itemId) {
 
   const form = $("#itemForm");
   form.dataset.editingId = item.id;
+  updatePurchasePaymentControls();
 
   updateCategoryOptions();
 
@@ -2371,7 +2458,7 @@ function openItemDetails(itemId) {
     html += detailBox("Platform", sale.source === "ebay" ? "eBay" : (sale.platform || "Other"));
     if (sale.reinvestmentPercent !== undefined) {
       const reinvestPercent = Math.max(0, Math.min(100, Number(sale.reinvestmentPercent) || 0));
-      html += detailBox("Profit split", `${reinvestPercent}% reinvest · ${100 - reinvestPercent}% personal`);
+      html += detailBox("Profit split", `${reinvestPercent}% stays in business · ${100 - reinvestPercent}% moves to personal`);
     }
     if (sale.saleDateEstimated) {
       html += `<p class="field-hint sale-date-estimate">The eBay report gave a date range, not an exact sale date. This sale is dated to the report end: ${escapeHtml(formatDate(sale.saleReportEndDate || sale.saleDate))}.</p>`;
@@ -2395,10 +2482,10 @@ function openItemDetails(itemId) {
     if (sale.status === "pending") {
       html += `
         <div class="sale-payout-allocation">
-          <label class="field" for="pendingReinvestmentPercent">Profit split: <span id="pendingReinvestmentLabel">${Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))}% reinvestment</span>
+          <label class="field" for="pendingReinvestmentPercent">Business share of profit: <span id="pendingReinvestmentLabel">${Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))}% stays in business bank</span>
             <input id="pendingReinvestmentPercent" type="range" min="0" max="100" step="1" value="${Math.max(0, Math.min(100, Number(sale.reinvestmentPercent ?? 50)))}" data-pending-sale-split="${escapeHtml(sale.id)}">
           </label>
-          <p class="field-hint" id="pendingAllocationPreview">${item.purchaseCostUnknown ? "Add the bought cost to calculate the allocation." : "Costs are returned to reinvestment first; the slider only splits the remaining profit."}</p>
+          <p class="field-hint" id="pendingAllocationPreview">${item.ownershipType === "consigned" ? "The full payout enters the business bank. The owner's share stays there until you mark it paid; the slider splits your share between accounts." : item.purchaseCostUnknown || item.purchaseCostEstimated ? "Confirm the actual bought cost before payout to calculate the personal transfer; estimates stay in the business bank until confirmed." : "The payout is recorded in the business bank first. Bought cost and sale costs stay in the business; the slider splits only the remaining profit."}</p>
         </div>
         <div class="detail-actions">
 
@@ -2488,9 +2575,10 @@ function showSaleForm(itemId) {
         </label>
 
         <label class="field">
-          Platform fees ($)
-          <input name="platformFees" type="number"
-            min="0" step="0.01" value="0" required>
+          Platform fees (%)
+          <input name="platformFeePercent" type="number"
+            min="0" max="100" step="0.1" value="${Math.max(0, Math.min(100, Number(data.settings.defaultFeePercent) || 13))}" required>
+          <span class="field-hint" id="saleFeeEstimate">Estimated fee: $0.00</span>
         </label>
 
         <label class="field">
@@ -2513,7 +2601,7 @@ function showSaleForm(itemId) {
 
       </div>
 
-      <label class="field full-width" for="saleReinvestmentPercent">Profit split: <span id="saleReinvestmentLabel">50% reinvestment · 50% personal</span>
+      <label class="field full-width" for="saleReinvestmentPercent">Business share of profit: <span id="saleReinvestmentLabel">50% stays in business bank · 50% moves to personal</span>
         <input id="saleReinvestmentPercent" name="reinvestmentPercent" type="range" min="0" max="100" step="1" value="50">
       </label>
 
@@ -2543,21 +2631,27 @@ function showSaleForm(itemId) {
 
   function updateEstimate() {
     const values = new FormData(form);
+    const salePrice = Number(values.get("salePrice") || 0);
+    const platformFeePercent = Math.max(0, Math.min(100, Number(values.get("platformFeePercent") || 0)));
     const sale = {
-      salePrice: Number(values.get("salePrice") || 0),
-      platformFees: Number(values.get("platformFees") || 0),
+      salePrice,
+      platformFees: Math.round(salePrice * platformFeePercent) / 100,
       shipping: Number(values.get("shipping") || 0),
       otherCosts: Number(values.get("otherCosts") || 0),
       reinvestmentPercent: Number(values.get("reinvestmentPercent") || 0)
     };
     const allocation = saleCostBreakdown(sale, item);
-    $("#saleReinvestmentLabel").textContent = `${allocation.reinvestmentPercent}% reinvestment · ${100 - allocation.reinvestmentPercent}% personal`;
-    $("#saleEstimate").innerHTML = `
-      Net after fees and shipping: <strong>${money(allocation.net)}</strong><br>
-      Returned to reinvestment first (bought cost + sale costs): <strong>${money(allocation.reinvestmentFirst)}</strong><br>
-      Profit after all costs: <strong>${money(allocation.profit)}</strong><br>
-      Additional reinvestment: <strong>${money(allocation.reinvestmentAdded - allocation.reinvestmentFirst)}</strong> ·
-      Personal: <strong>${money(allocation.personalAdded)}</strong>`;
+    $("#saleFeeEstimate").textContent = `Estimated fee: ${money(sale.platformFees)}`;
+    $("#saleReinvestmentLabel").textContent = `${allocation.businessPercent}% stays in business bank · ${100 - allocation.businessPercent}% moves to personal`;
+    if (item.ownershipType === "consigned") {
+      const net = Math.max(0, allocation.net);
+      const ownerShare = Math.round(net * Math.max(0, Math.min(100, Number(item.consignmentPercent ?? 50))) / 100 * 100) / 100;
+      const sellerShare = Math.round((net - ownerShare) * 100) / 100;
+      const personalShare = Math.round(sellerShare * (100 - allocation.businessPercent)) / 100;
+      $("#saleEstimate").innerHTML = `Net payout: <strong>${money(net)}</strong><br>Held for the owner: <strong>${money(ownerShare)}</strong><br>Moved to personal bank: <strong>${money(personalShare)}</strong><br>Remaining in business bank: <strong>${money(net - personalShare)}</strong>`;
+      return;
+    }
+    $("#saleEstimate").innerHTML = `Net after fees and shipping: <strong>${money(allocation.net)}</strong><br>Payout kept in business bank for bought cost and sale costs: <strong>${money(allocation.businessCostRecovery)}</strong><br>Profit after all costs: <strong>${money(allocation.profit)}</strong><br>Profit kept in business bank: <strong>${money(allocation.businessBankShare - allocation.businessCostRecovery)}</strong> · Moved to personal bank: <strong>${money(allocation.personalBankShare)}</strong>`;
   }
 
   form.addEventListener("input", updateEstimate);
@@ -2623,9 +2717,15 @@ async function readSaleScreenshot(event) {
     const { data: result } = await worker.recognize(file);
     const parsed = parseSaleScreenshotText(result.text || "");
     const form = $("#saleForm");
-    ["salePrice", "platformFees", "shipping", "saleDate"].forEach((name) => {
+    ["salePrice", "shipping", "saleDate"].forEach((name) => {
       if (parsed[name] !== undefined) form.elements.namedItem(name).value = parsed[name];
     });
+    if (parsed.platformFees !== undefined) {
+      const screenshotPrice = Number(parsed.salePrice ?? form.elements.namedItem("salePrice").value);
+      if (screenshotPrice > 0) {
+        form.elements.namedItem("platformFeePercent").value = (parsed.platformFees / screenshotPrice * 100).toFixed(2);
+      }
+    }
     form.dispatchEvent(new Event("input", { bubbles: true }));
     message.textContent = Object.keys(parsed).length
       ? "Recognized details were filled in. Review them before saving."
@@ -2645,17 +2745,23 @@ function saveSale(event, itemId) {
   const values = new FormData(event.currentTarget);
 
   const salePrice = Number(values.get("salePrice"));
-  const platformFees = Number(values.get("platformFees"));
+  const platformFeePercent = Number(values.get("platformFeePercent"));
+  const platformFees = Math.round(salePrice * platformFeePercent) / 100;
   const shipping = Number(values.get("shipping"));
   const otherCosts = Number(values.get("otherCosts"));
   const saleDate = String(values.get("saleDate") || "");
 
   if (!saleDate ||
-      [salePrice, platformFees, shipping, otherCosts]
+      [salePrice, platformFeePercent, platformFees, shipping, otherCosts]
         .some((amount) => !Number.isFinite(amount) || amount < 0)) {
     $("#saleMessage").textContent =
       "Enter valid dates and nonnegative amounts.";
 
+    $("#saleMessage").classList.add("error");
+    return;
+  }
+  if (platformFeePercent > 100) {
+    $("#saleMessage").textContent = "Platform fee percentage must be 100% or less.";
     $("#saleMessage").classList.add("error");
     return;
   }
@@ -2715,16 +2821,20 @@ function markSalePaid(saleId) {
   }
 
   const oldFunds = { ...data.funds };
+  const oldBankLedger = JSON.parse(JSON.stringify(data.bankLedger));
   const oldSale = { ...sale };
 
   sale.status = "paid";
   sale.paidDate = todayString();
   sale.paidAt = new Date().toISOString();
   allocatePaidSaleFunds(sale, item);
+  syncPaidSaleBankEntries(sale, item);
   if (item.purchaseCostUnknown && item.ownershipType !== "consigned") sale.fundsAllocated = false;
 
   if (!saveData()) {
     data.funds = oldFunds;
+    data.bankLedger = oldBankLedger;
+    Object.keys(sale).forEach((key) => { if (!(key in oldSale)) delete sale[key]; });
     Object.assign(sale, oldSale);
     return;
   }
@@ -2939,6 +3049,11 @@ $("#searchItemPhotoButton").addEventListener("click", () => {
 });
 
 $("#itemForm").addEventListener("submit", saveItemForm);
+$("#purchasePaymentSource").addEventListener("change", () => updatePurchasePaymentControls(true));
+$("#purchaseCost").addEventListener("input", () => updatePurchasePaymentControls());
+$("#businessPurchaseAmount").addEventListener("input", (event) => { event.currentTarget.dataset.manualAmount = "true"; });
+$("#ownershipType").addEventListener("change", () => updatePurchasePaymentControls());
+updatePurchasePaymentControls(true);
 
 let itemPhotoPreviewUrl = "";
 function previewSelectedItemPhoto(event) {
@@ -3350,10 +3465,18 @@ document.addEventListener("input", (event) => {
     const sale = data.sales.find((entry) => entry.id === event.target.dataset.pendingSaleSplit);
     const item = sale && data.items.find((entry) => entry.id === sale.itemId);
     const percent = Math.max(0, Math.min(100, Number(event.target.value) || 0));
-    $("#pendingReinvestmentLabel").textContent = percent + "% reinvestment · " + (100 - percent) + "% personal";
-    if (sale && item && !item.purchaseCostUnknown) {
+    $("#pendingReinvestmentLabel").textContent = percent + "% stays in business bank · " + (100 - percent) + "% moves to personal";
+    if (sale && item && (item.ownershipType === "consigned" || (!item.purchaseCostUnknown && !item.purchaseCostEstimated))) {
+      if (item.ownershipType === "consigned") {
+        const net = Math.max(0, netProceeds(sale));
+        const ownerShare = Math.round(net * Math.max(0, Math.min(100, Number(item.consignmentPercent ?? 50))) / 100 * 100) / 100;
+        const sellerShare = Math.round((net - ownerShare) * 100) / 100;
+        const personalShare = Math.round(sellerShare * (100 - percent)) / 100;
+        $("#pendingAllocationPreview").textContent = `Business bank holds ${money(ownerShare)} for the owner; personal bank receives ${money(personalShare)} from your share when paid.`;
+        return;
+      }
       const allocation = saleCostBreakdown({ ...sale, reinvestmentPercent: percent }, item);
-      $("#pendingAllocationPreview").textContent = "Reinvestment first: " + money(allocation.reinvestmentFirst) + " costs; then " + money(allocation.reinvestmentAdded - allocation.reinvestmentFirst) + " of profit. Personal share: " + money(allocation.personalAdded) + ".";
+      $("#pendingAllocationPreview").textContent = "Business bank keeps " + money(allocation.businessCostRecovery) + " for bought and sale costs plus " + money(allocation.businessBankShare - allocation.businessCostRecovery) + " of profit. Personal bank receives " + money(allocation.personalBankShare) + " of profit.";
     }
   }
 });

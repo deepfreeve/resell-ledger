@@ -5,13 +5,14 @@ Status reflects the current repository. A checkmark means the feature is impleme
 ## Implemented in this working copy
 
 - [x] Photo capture, device file selection, browser image search, preview, private per-user Supabase Storage, thumbnail retrieval, clear retry errors.
-- [x] Import eBay Listings Sales and supported sales CSVs with duplicate review, backdated sale dates when present, bought-cost estimates or edits, and per-sale reinvestment split.
+- [x] Import eBay Listings Sales and supported sales CSVs with duplicate review, backdated sale dates when present, bought-cost estimates or edits, and per-sale business/personal profit split.
 - [x] Import eBay All active listings CSV reports into inventory with duplicate checks, available-quantity expansion, USD validation, and adjustable bought-cost estimates as a percent of listed price.
 - [x] Restore/export backups and CSV sales exports; backup now includes item, draft, and document photos.
 - [x] Account management, data reset, password recovery, cloud sync status/retry, and user-isolated Supabase data.
-- [x] Sale allocation returns inventory cost, fees, and shipping to reinvestment first, then applies the per-sale slider to remaining profit; same slider is available when recording a sale and marking its payout paid.
+- [x] Paid sale payouts automatically update the business bank; a per-sale slider transfers the personal profit share. New inventory can record a business-bank purchase debit; refunds and consignment payouts also post automatically.
 - [x] Inventory source, storage location, owned/consigned tracking, consignment settlement balances, package dimensions, and SKU barcode scanning where supported by the browser/device.
 - [x] Sourcing log and buy-plan calculator.
+- [x] Expandable Personal bank and Business bank T-accounts with dated deposits, spending, totals, and balances synced to the signed-in user's account data.
 - [x] Remove the Listing Drafts workspace because it did not publish or bulk-list items to eBay. Existing saved draft data remains preserved in account backups.
 - [x] Manual inventory value estimates and personal sold-price references.
 - [x] Manual price-comparison records; CACHE does not claim restricted eBay sold-comparable access.
