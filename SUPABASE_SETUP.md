@@ -22,7 +22,7 @@ The connected CACHE project has the private `cache-item-photos` bucket and its m
 
 ## Account deletion
 
-The account screen and public `/delete-account.html` page let a user re-enter their password and request permanent deletion. The `delete-account` Supabase Edge Function verifies the caller's JWT, removes objects under that user's folder in the private `cache-item-photos` bucket, then deletes the Auth user. The `cache_user_data` row is removed by its existing `ON DELETE CASCADE` relationship. No service or secret key is included in browser files. The function uses Supabase's injected server-side keys and requires no new database migration.
+The account screen and public `/delete-account.html` page let a user re-enter their password and request permanent deletion. The `delete-account` Supabase Edge Function verifies the caller's JWT, removes objects under that user's folder in the private `cache-item-photos` bucket, then deletes the Auth user. The `cache_user_data` row is removed by its existing `ON DELETE CASCADE` relationship, and the web clients clear the deleted account's local cache. No service or secret key is included in browser files. The function uses Supabase's injected server-side keys and requires no new database migration.
 
 The connected Supabase project has this function deployed. To redeploy it or install it in a clone:
 

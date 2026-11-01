@@ -4,7 +4,7 @@
 
 - CACHE has a branded bookmark icon for iPhone/iPad home screens and a web app manifest with the Android install icon sizes.
 - The existing site supports signed-in accounts, private per-user data and photos, password recovery, data export/backup, and account-data reset.
-- Added in-app and public account-deletion flows. They re-confirm the user's password, remove private photos, and delete the Supabase Auth account through a JWT-verified Edge Function. The function is deployed to the connected Supabase project; use the instructions in [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for future clones or redeployments.
+- Added in-app and public account-deletion flows. They re-confirm the user's password, remove private photos and local CACHE copies, and delete the Supabase Auth account through a JWT-verified Edge Function. The function is deployed to the connected Supabase project; use the instructions in [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for future clones or redeployments.
 - Added Capacitor 8.6.0 configuration, iOS/Android dependencies, native CLI scripts, and authenticated API CORS support for native origins. Platform projects still need to be generated and tested.
 - Draft store copy and a privacy-policy working draft are in `STORE_LISTING_DRAFT.md` and `PRIVACY_POLICY_DRAFT.md`. They are not final publication documents until the owner fills in the marked business, support, jurisdiction, and retention details.
 - The web app is hosted over HTTPS on the CACHE domain.

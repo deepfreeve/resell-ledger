@@ -37,6 +37,10 @@
         throw new Error(details?.error || error.message || "Account deletion did not finish.");
       }
 
+      try {
+        localStorage.removeItem("resellledger_data_v1:" + auth.user.id);
+        localStorage.removeItem("resellledger_data_v1");
+      } catch { /* Remote account deletion has already completed. */ }
       await client.auth.signOut({ scope: "local" });
       form.reset();
       message.textContent = "Your CACHE account and associated data have been permanently deleted.";

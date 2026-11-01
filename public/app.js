@@ -3163,7 +3163,10 @@ async function deleteAccount(event) {
       throw new Error(details?.error || error.message || "Account deletion did not finish.");
     }
 
-    try { localStorage.removeItem(STORAGE_KEY + ":" + user.id); } catch { /* The remote account is already deleted. */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY + ":" + user.id);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch { /* The remote account is already deleted. */ }
     try { await supabaseClient.auth.signOut({ scope: "local" }); } catch { /* The Auth user is already deleted. */ }
     form.reset();
     await handleAuthSession(null);
