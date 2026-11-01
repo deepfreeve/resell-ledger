@@ -1329,6 +1329,9 @@ textarea::placeholder {
   display: none;
 }
 
+.business-mobile-tabs, .home-mobile-tabs { display: none; }
+.business-tab-panel, .home-tab-panel { display: contents; }
+
 .mobile-tools-menu {
   display: none;
 }
@@ -1671,7 +1674,7 @@ textarea::placeholder {
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
     padding: 7px 5px calc(7px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border);
@@ -1694,11 +1697,18 @@ textarea::placeholder {
     font-size: 10px;
     font-weight: 650;
     white-space: nowrap;
+    overflow: hidden;
   }
 
   .nav-button .nav-icon {
     font-size: 19px;
     line-height: 1.1;
+  }
+
+  .nav-button > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .nav-button.active {
@@ -1817,7 +1827,7 @@ textarea::placeholder {
   }
 
   .nav-button {
-    font-size: 8px;
+    font-size: 8.5px;
   }
 }
 
@@ -1948,6 +1958,7 @@ textarea::placeholder {
 @media (max-width: 700px) {
   .mobile-account-link { display: inline-flex; padding: 7px 9px; font-size: 11px; }
   .topbar-right { gap: 6px; }
+  .topbar-right > .account-button { display: none; }
   .sync-status { padding: 6px 8px; font-size: 10px; }
   .report-filters { display: grid; grid-template-columns: 1fr 1fr; }
   .report-filters label { min-width: 0; }
@@ -1964,4 +1975,37 @@ textarea::placeholder {
   .lot-item-choice small { grid-column: 2; }
   .market-manual-form { align-items: stretch; flex-direction: column; }
   .market-manual-form .field { width: 100%; }
+  .business-mobile-tabs, .home-mobile-tabs {
+    position: sticky;
+    z-index: 30;
+    top: 7px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0 0 12px;
+    padding: 5px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: rgba(13, 16, 18, .97);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, .22);
+    scroll-margin-top: 8px;
+  }
+  .home-mobile-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .business-mobile-tabs button, .home-mobile-tabs button {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 2px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 650;
+  }
+  .business-mobile-tabs button[aria-selected="true"], .home-mobile-tabs button[aria-selected="true"] {
+    background: #1b2429;
+    color: var(--main-color);
+  }
+  .business-tab-panel, .home-tab-panel { display: none !important; }
+  .business-tab-panel.is-active, .home-tab-panel.is-active { display: block !important; }
 }

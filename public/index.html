@@ -176,6 +176,13 @@
         </div>
 
 
+        <div class="home-mobile-tabs" id="homeMobileTabs" role="tablist" aria-label="Dashboard sections">
+          <button type="button" role="tab" id="homeTabOverview" aria-controls="homePanelOverview" aria-selected="true" data-home-tab="overview">Summary</button>
+          <button type="button" role="tab" id="homeTabInsights" aria-controls="homePanelInsights" aria-selected="false" data-home-tab="insights">Insights</button>
+          <button type="button" role="tab" id="homeTabBanks" aria-controls="homePanelBanks" aria-selected="false" data-home-tab="banks">Banks</button>
+          <button type="button" role="tab" id="homeTabReports" aria-controls="homePanelReports" aria-selected="false" data-home-tab="reports">Reports</button>
+        </div>
+        <div class="home-tab-panel is-active" id="homePanelOverview" role="tabpanel" aria-labelledby="homeTabOverview" data-home-tab-panel="overview">
         <!-- MAIN STATISTICS -->
         <div class="stats-grid">
 
@@ -283,6 +290,8 @@
 
         </div>
 
+        </div>
+        <div class="home-tab-panel" id="homePanelBanks" role="tabpanel" aria-labelledby="homeTabBanks" data-home-tab-panel="banks">
         <section class="panel bank-ledger-panel" aria-labelledby="bankLedgerHeading">
           <div class="panel-heading"><div><p class="eyebrow">CASH TRACKING</p><h3 id="bankLedgerHeading">Bank accounts</h3></div></div>
           <p class="field-hint">Paid sale payouts are added to the business bank automatically; your sale slider moves the personal share to your personal bank. When adding inventory, choose whether to subtract its purchase amount from the business bank. Record other deposits and spending here. To start with your current balance, enter it as money in and label it “Opening balance.”</p>
@@ -307,6 +316,8 @@
         </section>
 
 
+        </div>
+        <div class="home-tab-panel" id="homePanelInsights" role="tabpanel" aria-labelledby="homeTabInsights" data-home-tab-panel="insights">
         <!-- MAIN DASHBOARD ROW -->
         <div class="dashboard-grid">
 
@@ -412,6 +423,8 @@
 
         </div>
 
+        </div>
+        <div class="home-tab-panel" id="homePanelReports" role="tabpanel" aria-labelledby="homeTabReports" data-home-tab-panel="reports">
         <section class="panel financial-reports-panel">
           <div class="panel-heading">
             <div>
@@ -439,6 +452,7 @@
           <div class="report-table-wrap" id="platformProfitReport"></div>
           <p class="form-message" id="backupMessage" role="status" aria-live="polite"></p>
         </section>
+        </div>
 
       </section>
 
@@ -463,6 +477,14 @@
 
       <section class="page" id="page-business">
         <div class="page-heading"><div><p class="eyebrow">BUSINESS WORKSPACE</p><h1>Business tools</h1><p class="page-description">Price with costs in mind, track grading and goals, manage fulfillment, and keep sales records complete.</p></div></div>
+        <div class="business-mobile-tabs" id="businessMobileTabs" role="tablist" aria-label="Business tool sections">
+          <button type="button" role="tab" id="businessTabImports" aria-controls="businessPanelImports" aria-selected="true" data-business-tab="imports">Import</button>
+          <button type="button" role="tab" id="businessTabPlanning" aria-controls="businessPanelPlanning" aria-selected="false" data-business-tab="planning">Pricing</button>
+          <button type="button" role="tab" id="businessTabSales" aria-controls="businessPanelSales" aria-selected="false" data-business-tab="sales">Sales</button>
+          <button type="button" role="tab" id="businessTabInventory" aria-controls="businessPanelInventory" aria-selected="false" data-business-tab="inventory">Stock</button>
+          <button type="button" role="tab" id="businessTabShipping" aria-controls="businessPanelShipping" aria-selected="false" data-business-tab="shipping">Ship</button>
+        </div>
+        <div class="business-tab-panel is-active" id="businessPanelImports" role="tabpanel" aria-labelledby="businessTabImports" data-business-tab-panel="imports">
         <section class="panel ebay-import-panel">
           <div class="panel-heading"><div><p class="eyebrow">SALES HISTORY</p><h3>Import eBay sales CSV</h3></div></div>
           <p class="field-hint">Choose an eBay orders/sales CSV or Listings Sales report and review rows before importing. Enter the bought cost and choose what share of profit stays in the business bank. When a sale is marked paid, the payout enters the business bank, sale costs are recovered there first, then the remaining profit is split between business and personal accounts. Leave cost blank if unknown. We match by SKU or title, skip duplicates, and ignore buyer details. Listings Sales reports only give a date range, so those sales use the report end date.</p>
@@ -491,6 +513,8 @@
             <button class="secondary-button" id="cancelEbayActiveButton" type="button" hidden>Clear preview</button>
           </div>
         </section>
+        </div>
+        <div class="business-tab-panel" id="businessPanelPlanning" role="tabpanel" aria-labelledby="businessTabPlanning" data-business-tab-panel="planning">
         <div class="dashboard-grid">
           <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PRICING</p><h3>Fee and shipping estimator</h3></div></div>
             <form id="feeEstimatorForm" class="feature-form"><label class="field">Expected sale price ($)<input name="salePrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Offer received ($)<input name="offerPrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label><label class="field">Fixed fee ($)<input name="fixedFee" type="number" min="0" step="0.01" value="0.30"></label><label class="field">Shipping cost ($)<input name="shipping" type="number" min="0" step="0.01" value="6"></label><label class="field">Bought cost ($)<input name="purchaseCost" type="number" min="0" step="0.01" value="0"></label><label class="field">Other cost ($)<input name="other" type="number" min="0" step="0.01" value="0"></label><label class="field">Target profit ($)<input name="targetProfit" type="number" min="0" step="0.01" value="10"></label></form>
@@ -500,6 +524,8 @@
             <form id="goalForm" class="feature-form"><label class="field">Goal name<input name="name" required maxlength="80" placeholder="November target"></label><label class="field">Target profit ($)<input name="target" type="number" min="1" step="0.01" required></label><label class="field">Period<select name="period"><option value="month">This month</option><option value="week">This week</option></select></label><button class="primary-button" type="submit">Set goal</button></form><div id="goalList" class="feature-list"></div>
           </section>
         </div>
+        </div>
+        <div class="business-tab-panel" id="businessPanelShipping" role="tabpanel" aria-labelledby="businessTabShipping" data-business-tab-panel="shipping">
         <div class="dashboard-grid">
           <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">CARD GRADING</p><h3>Track a grading submission</h3></div></div>
             <form id="gradingForm" class="feature-form"><label class="field">Inventory item<select name="itemId" id="gradingItemSelect" required></select></label><label class="field">Company<input name="company" required maxlength="60" placeholder="PSA"></label><label class="field">Submission date<input name="date" type="date" required></label><label class="field">Grading fee ($)<input name="fee" type="number" min="0" step="0.01" required></label><label class="field">Shipping and insurance ($)<input name="shipping" type="number" min="0" step="0.01" value="0" required></label><label class="field">Estimated value after grading ($)<input name="estimatedValue" type="number" min="0" step="0.01"></label><label class="field">Status<select name="status"><option>Preparing</option><option>Submitted</option><option>In grading</option><option>Shipped back</option><option>Complete</option></select></label><button class="primary-button" type="submit">Save submission</button></form><div id="gradingList" class="feature-list"></div>
@@ -508,12 +534,16 @@
             <form id="shipmentForm" class="feature-form"><label class="field">Paid sale<select name="saleId" id="shipmentSaleSelect" required></select></label><label class="field">Carrier<input name="carrier" maxlength="60" placeholder="USPS"></label><label class="field">Tracking number<input name="tracking" maxlength="100"></label><label class="field">Ship-by date<input name="shipBy" type="date"></label><label class="field">Package / notes<input name="notes" maxlength="120"></label><button class="primary-button" type="submit">Save shipment</button></form><div id="shipmentList" class="feature-list"></div>
           </section>
         </div>
+        </div>
+        <div class="business-tab-panel" id="businessPanelSales" role="tabpanel" aria-labelledby="businessTabSales" data-business-tab-panel="sales">
         <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">BUNDLES & LOTS</p><h3>Record a multi-item sale</h3></div></div><p class="field-hint">Choose the items sold together. CACHE will split revenue and sale costs across them so each item's cost and profit remain traceable.</p>
           <form id="bundleSaleForm" class="feature-form"><div id="bundleItemChoices" class="lot-item-choices full-width"></div><label class="field">Total sale price ($)<input name="price" type="number" min="0.01" step="0.01" required></label><label class="field">Platform fees ($)<input name="fees" type="number" min="0" step="0.01" value="0" required></label><label class="field">Shipping cost ($)<input name="shipping" type="number" min="0" step="0.01" value="0" required></label><label class="field">Other costs ($)<input name="other" type="number" min="0" step="0.01" value="0" required></label><label class="field">Split method<select name="splitMethod"><option value="listed">By listed price</option><option value="equal">Even split</option></select></label><label class="field">Platform<select name="platform"><option value="other">Other</option><option value="ebay">eBay</option></select></label><label class="field">Sale date<input name="date" type="date" required></label><button class="primary-button" type="submit">Record bundle sale</button></form>
         </section>
         <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">RETURNS</p><h3>Record a refund or return</h3></div></div>
           <p class="field-hint">Refunds update recorded sale proceeds and funds. Mark the item returned only if it is physically back and ready to sell.</p><form id="returnForm" class="feature-form"><label class="field">Paid sale<select name="saleId" id="returnSaleSelect" required></select></label><label class="field">Refund amount ($)<input name="amount" type="number" min="0.01" step="0.01" required></label><label class="field">Refund date<input name="date" type="date" required></label><label class="field">Item received back?<select name="returned"><option value="no">No</option><option value="yes">Yes, return to inventory</option></select></label><label class="field">Reason / notes<input name="notes" maxlength="200"></label><button class="primary-button" type="submit">Record refund</button></form><div id="returnList" class="feature-list"></div>
         </section>
+        </div>
+        <div class="business-tab-panel" id="businessPanelInventory" role="tabpanel" aria-labelledby="businessTabInventory" data-business-tab-panel="inventory">
         <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">BULK COST BASIS</p><h3>Split mixed-lot purchase cost</h3></div></div><p class="field-hint">Choose items from one lot and allocate the full lot price by item value or evenly. If the business bank paid for the lot, choose that option to record the cash withdrawal too.</p>
           <form id="lotSplitForm" class="feature-form"><label class="field">Lot name<input name="name" maxlength="100" required></label><label class="field">Total lot cost ($)<input name="cost" id="lotTotalCost" type="number" min="0.01" step="0.01" required></label><label class="field">Allocation<select name="method"><option value="equal">Even split</option><option value="listed">By listed value</option></select></label><label class="field">How was it paid?<select name="paymentSource" id="lotPaymentSource"><option value="already">Already paid / don't change bank</option><option value="business">Pay from business bank</option></select></label><label class="field" id="lotBankAmountGroup" hidden>Amount from business bank ($)<input name="bankAmount" id="lotBankAmount" type="number" min="0.01" step="0.01" placeholder="Defaults to total lot cost"></label><div id="lotItemChoices" class="lot-item-choices full-width"></div><button class="primary-button" type="submit">Allocate cost</button></form><div id="lotSplitList" class="feature-list"></div>
         </section>
@@ -524,6 +554,7 @@
           <form id="documentForm" class="feature-form"><label class="field">Inventory item<select name="itemId" required></select></label><label class="field">Document name<input name="title" maxlength="100" required placeholder="Purchase receipt"></label><label class="field">Type<select name="kind"><option>Receipt</option><option>Grading record</option><option>Shipping document</option><option>Other</option></select></label><label class="field">Image file<input id="documentImage" type="file" accept="image/*" required></label><button class="primary-button" type="submit">Upload privately</button><p id="documentStatus" class="form-message full-width" role="status" aria-live="polite"></p></form>
           <div id="documentList" class="feature-list"></div>
         </section>
+        </div>
       </section>
 
       <!-- ACCOUNT -->
@@ -870,7 +901,7 @@
 
   <button class="nav-button" type="button" data-page="inventory">
     <span class="nav-icon">▤</span>
-    <span>Inventory</span>
+    <span>Items</span>
   </button>
 
   <button class="nav-button add-nav-button" type="button" data-page="add">
@@ -883,17 +914,13 @@
     <span>Pending</span>
   </button>
 
-  <button class="nav-button" type="button" data-page="sold">
-    <span class="nav-icon">✓</span>
-    <span>Sold</span>
-  </button>
-
   <button class="nav-button" id="mobileToolsToggle" type="button" aria-label="Open more CACHE tools" aria-haspopup="true" aria-expanded="false" aria-controls="mobileToolsMenu">
     <span class="nav-icon">⋯</span>
     <span>Tools</span>
   </button>
 
   <div class="mobile-tools-menu" id="mobileToolsMenu" aria-label="More CACHE tools" hidden>
+    <button class="mobile-tool-link" type="button" data-page="sold"><span class="nav-icon">✓</span><span>Completed sales</span></button>
     <button class="mobile-tool-link" type="button" data-page="sourcing"><span class="nav-icon">⌕</span><span>Sourcing</span></button>
     <button class="mobile-tool-link" type="button" data-page="business"><span class="nav-icon">◈</span><span>Business tools</span></button>
     <button class="mobile-tool-link" type="button" data-page="account"><span class="nav-icon">◉</span><span>Your account</span></button>

@@ -1902,6 +1902,40 @@ function closeMobileSearch() {
   toggle.setAttribute("aria-expanded", "false");
 }
 
+function setBusinessMobileTab(tabName, scrollToTabs = false) {
+  const validTabs = ["imports", "planning", "sales", "inventory", "shipping"];
+  if (!validTabs.includes(tabName)) return;
+  const page = $("#page-business");
+  if (!page) return;
+  page.dataset.activeTab = tabName;
+  page.querySelectorAll("[data-business-tab]").forEach((tab) => {
+    tab.setAttribute("aria-selected", String(tab.dataset.businessTab === tabName));
+  });
+  page.querySelectorAll("[data-business-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.businessTabPanel === tabName);
+  });
+  if (scrollToTabs && window.matchMedia("(max-width: 700px)").matches) {
+    $("#businessMobileTabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function setHomeMobileTab(tabName, scrollToTabs = false) {
+  const validTabs = ["overview", "insights", "banks", "reports"];
+  if (!validTabs.includes(tabName)) return;
+  const page = $("#page-home");
+  if (!page) return;
+  page.dataset.activeTab = tabName;
+  page.querySelectorAll("[data-home-tab]").forEach((tab) => {
+    tab.setAttribute("aria-selected", String(tab.dataset.homeTab === tabName));
+  });
+  page.querySelectorAll("[data-home-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.homeTabPanel === tabName);
+  });
+  if (scrollToTabs && window.matchMedia("(max-width: 700px)").matches) {
+    $("#homeMobileTabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 function showPage(pageName) {
   if (!["home", "inventory", "add", "pending", "sold", "account", "sourcing", "business"].includes(pageName)) {
     return;
@@ -1922,7 +1956,7 @@ function showPage(pageName) {
   });
 
   const toolsToggle = $("#mobileToolsToggle");
-  if (toolsToggle) toolsToggle.classList.toggle("active", ["sourcing", "business", "account"].includes(pageName));
+  if (toolsToggle) toolsToggle.classList.toggle("active", ["sold", "sourcing", "business", "account"].includes(pageName));
   closeMobileToolsMenu();
 
   const titles = {
@@ -1939,6 +1973,9 @@ function showPage(pageName) {
   const title = $("#currentPageTitle");
 
   if (title) title.textContent = titles[pageName];
+  if (pageName === "home") setHomeMobileTab($("#page-home").dataset.activeTab || "overview");
+  if (pageName === "business") setBusinessMobileTab($("#page-business").dataset.activeTab || "imports");
+  window.scrollTo(0, 0);
 
   $("#formMessage").textContent = "";
   $("#formMessage").classList.remove("error");
@@ -2939,6 +2976,16 @@ $("#mobileToolsToggle").addEventListener("click", () => {
 
 $("#mobileToolsMenu").addEventListener("click", (event) => {
   if (event.target.closest("[data-page]")) closeMobileToolsMenu();
+});
+
+$("#businessMobileTabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-business-tab]");
+  if (tab) setBusinessMobileTab(tab.dataset.businessTab, true);
+});
+
+$("#homeMobileTabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-home-tab]");
+  if (tab) setHomeMobileTab(tab.dataset.homeTab, true);
 });
 
 $("#mobileSearchToggle").addEventListener("click", () => {
