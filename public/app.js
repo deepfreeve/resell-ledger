@@ -530,8 +530,8 @@ function updateDashboard() {
   $("#inventoryValue").textContent = money(inventoryValue);
   $("#marketInventoryValue").textContent = money(marketValueTotal);
   $("#marketInventorySummary").textContent = pricedMarketItems.length
-    ? `${pricedMarketItems.length} of ${unsoldItems.length} in-stock items priced · estimated gain ${money(marketKnownValue - marketBasis)} across ${marketKnownCostItems.length} with known cost`
-    : "No market values saved yet";
+    ? `${pricedMarketItems.length} of ${unsoldItems.length} in-stock items have a saved value estimate · estimated gain ${money(marketKnownValue - marketBasis)} across ${marketKnownCostItems.length} with known cost`
+    : "No value estimates saved yet";
 
   $("#salesOverviewTotal").textContent = money(salesRevenue);
 
@@ -1613,7 +1613,7 @@ function itemRow(item) {
         </strong>
 
         <span>${sale ? "Net proceeds" : "Listed price"}</span>
-        ${!sale && item.marketValue !== undefined && item.marketValue !== null && item.marketValue !== "" && Number.isFinite(Number(item.marketValue)) ? `<span class="market-value-chip">Market ${money(item.marketValue)}</span>` : ""}
+        ${!sale && item.marketValue !== undefined && item.marketValue !== null && item.marketValue !== "" && Number.isFinite(Number(item.marketValue)) ? `<span class="market-value-chip">Value ${money(item.marketValue)}</span>` : ""}
 
         <button class="text-button" type="button"
           data-open-item="${escapeHtml(item.id)}">
@@ -1807,7 +1807,7 @@ function closeMobileSearch() {
 }
 
 function showPage(pageName) {
-  if (!["home", "inventory", "add", "pending", "sold", "account", "sourcing", "drafts", "business"].includes(pageName)) {
+  if (!["home", "inventory", "add", "pending", "sold", "account", "sourcing", "business"].includes(pageName)) {
     return;
   }
 
@@ -1826,7 +1826,7 @@ function showPage(pageName) {
   });
 
   const toolsToggle = $("#mobileToolsToggle");
-  if (toolsToggle) toolsToggle.classList.toggle("active", ["sourcing", "drafts", "business", "account"].includes(pageName));
+  if (toolsToggle) toolsToggle.classList.toggle("active", ["sourcing", "business", "account"].includes(pageName));
   closeMobileToolsMenu();
 
   const titles = {
@@ -1836,8 +1836,7 @@ function showPage(pageName) {
     pending: "Pending payouts",
     sold: "Completed sales",
     account: "Your account",
-    sourcing: "Sourcing & deals",
-    drafts: "Listing drafts",
+    sourcing: "Sourcing",
     business: "Business tools"
   };
 

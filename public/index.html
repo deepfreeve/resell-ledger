@@ -66,8 +66,7 @@
       <button class="sidebar-link" data-page="add" type="button">
         <span class="nav-icon">＋</span> Add item
       </button>
-      <button class="sidebar-link" data-page="sourcing" type="button"><span class="nav-icon">⌕</span> Sourcing & deals</button>
-      <button class="sidebar-link" data-page="drafts" type="button"><span class="nav-icon">✎</span> Listing drafts</button>
+      <button class="sidebar-link" data-page="sourcing" type="button"><span class="nav-icon">⌕</span> Sourcing</button>
     </div>
 
     <div class="sidebar-section">
@@ -237,11 +236,11 @@
 
           <article class="stat-card">
             <div class="stat-top">
-              <span>Estimated market value</span>
+              <span>Saved inventory value</span>
               <span class="stat-icon">◇</span>
             </div>
             <h2 id="marketInventoryValue">$0.00</h2>
-            <p id="marketInventorySummary">No market values saved yet</p>
+            <p id="marketInventorySummary">No value estimates saved yet</p>
           </article>
 
 
@@ -441,20 +440,23 @@
 
       <!-- ACCOUNT -->
       <section class="page" id="page-sourcing">
-        <div class="page-heading"><div><p class="eyebrow">FIND YOUR NEXT BUY</p><h1>Sourcing & deals</h1><p class="page-description">Track where you buy, set deal rules, and judge opportunities against real sale data.</p></div></div>
+        <div class="page-heading"><div><p class="eyebrow">BUYING WORKSPACE</p><h1>Sourcing</h1><p class="page-description">Track where you buy, compare your recorded sales, and plan purchases with your own resale estimate.</p></div></div>
         <section class="panel feature-panel">
-          <div class="panel-heading"><div><p class="eyebrow">SELECTIVE DEAL FINDER</p><h3>Saved deal searches</h3></div></div>
-          <p class="field-hint">CACHE will only label an eBay listing a possible deal when there are enough comparable sales with a close product and condition match. eBay sold-price API access is restricted, so your own sales and manually entered comps are used unless an approved source is configured.</p>
+          <div class="panel-heading"><div><p class="eyebrow">EBAY ACTIVE LISTINGS</p><h3>Find a deal</h3></div></div>
+          <p class="field-hint">Search current eBay listings and compare asking prices with your own recorded sales and saved comparisons. eBay active listing prices are not sold prices, so CACHE only estimates profit when it has enough close comparisons.</p>
+          <div class="detail-actions deal-mode-switch" role="group" aria-label="Deal search type"><button class="primary-button" id="easyDealMode" type="button" aria-pressed="true">Easy</button><button class="secondary-button" id="advancedDealMode" type="button" aria-pressed="false">Advanced</button></div>
           <form id="dealSearchForm" class="feature-form">
-            <label class="field">Product or search phrase<input name="query" maxlength="100" required placeholder="Charizard 151, PSA 10"></label>
-            <label class="field">Condition<select name="condition"><option value="any">Any</option><option>New</option><option>Near Mint</option><option>Lightly Played</option><option>Moderately Played</option><option>Heavily Played</option><option>Damaged</option><option>Graded</option><option>Used</option></select></label>
-            <label class="field">Max all-in buy cost ($)<input name="maxCost" type="number" min="0" step="0.01" value="25"></label>
-            <label class="field">Minimum expected profit ($)<input name="minProfit" type="number" min="0" step="0.01" value="10"></label>
-            <label class="field">Minimum ROI (%)<input name="minRoi" type="number" min="0" step="1" value="30"></label>
-            <label class="field">Minimum comparable sales<input name="minimumComps" type="number" min="1" max="100" step="1" value="3"></label>
-            <label class="field">Shipping cap ($)<input name="maxShipping" type="number" min="0" step="0.01" value="8"></label>
-            <label class="field">Estimated platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label>
-            <div class="detail-actions full-width"><button class="primary-button" type="submit">Save search</button><button class="secondary-button" type="button" id="scanDealsButton">Check eBay listings</button><button class="secondary-button" type="button" id="dealNotificationsButton">Turn on deal alerts</button></div>
+            <label class="field">Card or product name<input name="query" maxlength="100" required placeholder="Charizard 151, PSA 10"></label>
+            <label class="field">Condition<select name="condition"><option value="any">Any condition</option><option>New</option><option>Near Mint</option><option>Lightly Played</option><option>Moderately Played</option><option>Heavily Played</option><option>Damaged</option><option>Graded</option><option>Used</option></select></label>
+            <label class="field">Maximum total cost ($)<input name="maxCost" type="number" min="0" step="0.01" value="25" required></label>
+            <div id="dealAdvancedOptions" class="feature-form full-width" hidden>
+              <label class="field">Minimum expected profit ($)<input name="minProfit" type="number" min="0" step="0.01" value="10"></label>
+              <label class="field">Minimum return on investment (%)<input name="minRoi" type="number" min="0" step="1" value="30"></label>
+              <label class="field">Minimum close sold comparisons<input name="minimumComps" type="number" min="1" max="100" step="1" value="3"></label>
+              <label class="field">Maximum shipping ($)<input name="maxShipping" type="number" min="0" step="0.01" value="8"></label>
+              <label class="field">Estimated platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label>
+            </div>
+            <div class="detail-actions full-width"><button class="primary-button" type="submit">Search eBay</button><button class="secondary-button" id="saveDealSearchButton" type="button" hidden>Save advanced search</button></div>
           </form>
           <div id="dealSearchList" class="feature-list"></div>
           <div id="dealResults" class="deal-results" aria-live="polite"></div>
@@ -475,20 +477,24 @@
         </section>
       </section>
 
-      <section class="page" id="page-drafts">
-        <div class="page-heading"><div><p class="eyebrow">LISTING WORKSPACE</p><h1>Listing drafts</h1><p class="page-description">Prepare and review listings before turning them into inventory or publishing.</p></div></div>
-        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">AI BATCH INTAKE</p><h3>Start drafts from product photos</h3></div></div>
-          <p class="field-hint">Choose one or more product photos. AI suggestions may be wrong, so review and edit every draft. CACHE will not invent purchase costs or dates. Photos are sent to the configured AI service only when you choose Generate drafts.</p>
-          <form id="aiDraftForm" class="feature-form"><label class="field">Product photos<input id="draftPhotoFiles" name="photos" type="file" accept="image/*" multiple required></label><label class="field">Extra details (optional)<textarea name="context" rows="3" maxlength="1000" placeholder="Set, edition, defects, what you know"></textarea></label><button class="primary-button" type="submit">Generate draft suggestions</button><p id="draftStatus" class="form-message full-width" role="status" aria-live="polite"></p></form>
-        </section>
-        <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">MANUAL DRAFT</p><h3>Create a listing draft</h3></div></div>
-          <form id="manualDraftForm" class="feature-form"><label class="field">Title<input name="title" required maxlength="140"></label><label class="field">Category<select name="category" id="draftCategory"></select></label><label class="field">Condition<input name="condition" required maxlength="60" value="Not specified"></label><label class="field">Suggested price ($)<input name="price" type="number" min="0" step="0.01"></label><label class="field full-width">Description<textarea name="description" rows="4" maxlength="4000"></textarea></label><button class="primary-button" type="submit">Save draft</button></form>
-        </section>
-        <div id="listingDraftList" class="draft-grid"></div>
-      </section>
-
       <section class="page" id="page-business">
         <div class="page-heading"><div><p class="eyebrow">BUSINESS WORKSPACE</p><h1>Business tools</h1><p class="page-description">Price with costs in mind, track grading and goals, manage fulfillment, and keep sales records complete.</p></div></div>
+        <section class="panel feature-panel ebay-active-import-panel">
+          <div class="panel-heading"><div><p class="eyebrow">INVENTORY IMPORT</p><h3>Import active eBay listings</h3></div></div>
+          <p class="field-hint">Download an All active listings report from eBay Seller Hub Reports, then choose the CSV here. Set an estimated bought cost as a percentage of each listed price, then review and adjust costs before importing. Estimated costs are labeled and can be edited later. This adds inventory only; it does not import sales.</p>
+          <div class="feature-form">
+            <label class="field">Active listings CSV<input id="ebayActiveCsvFile" type="file" accept=".csv,text/csv"></label>
+            <label class="field ebay-active-percent" for="ebayActiveCostPercent">Estimate the amount you paid: <span id="ebayActiveCostLabel">50% of listed price</span>
+              <input id="ebayActiveCostPercent" type="range" min="0" max="100" step="1" value="50">
+            </label>
+          </div>
+          <p id="ebayActiveImportSummary" class="form-message" role="status" aria-live="polite"></p>
+          <div id="ebayActivePreview" class="report-table-wrap"></div>
+          <div class="detail-actions">
+            <button class="primary-button" id="importEbayActiveButton" type="button" disabled>Add selected to inventory</button>
+            <button class="secondary-button" id="cancelEbayActiveButton" type="button" hidden>Clear preview</button>
+          </div>
+        </section>
         <div class="dashboard-grid">
           <section class="panel feature-panel"><div class="panel-heading"><div><p class="eyebrow">PRICING</p><h3>Fee and shipping estimator</h3></div></div>
             <form id="feeEstimatorForm" class="feature-form"><label class="field">Expected sale price ($)<input name="salePrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Offer received ($)<input name="offerPrice" type="number" min="0" step="0.01" value="0"></label><label class="field">Platform fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.1" value="13"></label><label class="field">Fixed fee ($)<input name="fixedFee" type="number" min="0" step="0.01" value="0.30"></label><label class="field">Shipping cost ($)<input name="shipping" type="number" min="0" step="0.01" value="6"></label><label class="field">Bought cost ($)<input name="purchaseCost" type="number" min="0" step="0.01" value="0"></label><label class="field">Other cost ($)<input name="other" type="number" min="0" step="0.01" value="0"></label><label class="field">Target profit ($)<input name="targetProfit" type="number" min="0" step="0.01" value="10"></label></form>
@@ -897,8 +903,7 @@
   </button>
 
   <div class="mobile-tools-menu" id="mobileToolsMenu" aria-label="More CACHE tools" hidden>
-    <button class="mobile-tool-link" type="button" data-page="sourcing"><span class="nav-icon">⌕</span><span>Sourcing &amp; deals</span></button>
-    <button class="mobile-tool-link" type="button" data-page="drafts"><span class="nav-icon">✎</span><span>Listing drafts</span></button>
+    <button class="mobile-tool-link" type="button" data-page="sourcing"><span class="nav-icon">⌕</span><span>Sourcing</span></button>
     <button class="mobile-tool-link" type="button" data-page="business"><span class="nav-icon">◈</span><span>Business tools</span></button>
     <button class="mobile-tool-link" type="button" data-page="account"><span class="nav-icon">◉</span><span>Your account</span></button>
   </div>

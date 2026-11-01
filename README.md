@@ -3,7 +3,7 @@ A responsive resale inventory and profit tracker for Pokémon cards, sports card
 Features
 Dark, mobile-friendly dashboard
 Track individual inventory items and purchase costs
-Record card market values separately from bought cost and listed price; review source, condition/grade, and price freshness
+Record your own value estimates separately from bought cost and listed price; optional eBay deal search checks active listings, not sold prices
 Categorize products and record their condition
 Search online for item photos, then browse or take private item photos and store notes
 Record sale prices, platform fees, shipping, and other sale expenses
@@ -14,9 +14,11 @@ Record recovered capital and allocate positive sale profit between reinvestment 
 View completed sales and lifetime profit
 Review monthly and category profit reports, export sales CSVs, and back up or restore account data
 Import eBay orders/sales CSVs and Listings Sales reports with preview, bought-cost entry, per-sale profit splits, and duplicate checks; summary reports use the report end date because they omit individual sale dates
+Import an eBay All active listings CSV into inventory, expand available quantity into individual items, skip previously imported listings, and estimate bought cost with a percentage slider against listed price
 Reset account inventory, sales, balances, categories, and stored item photos
 Delete the signed-in account and its private photos through the in-app flow or public account-deletion page
 Search and filter available inventory
+Search current eBay listings in easy mode or advanced mode, with saved comparisons and CACHE sales used for cautious profit estimates
 Duplicate item details when purchasing multiple copies
 Project files
 public/index.html — application structure
@@ -42,13 +44,11 @@ Follow SUPABASE_SETUP.md to create the database table, enable email sign-in, and
 Native app packaging is being prepared with Capacitor. The current app remains a PWA until iOS/Android projects are generated, deep links and native interactions are finished, and both platforms are tested. See APP_STORE_READINESS.md.
 
 Optional Cloudflare server features
-The AI photo-to-draft and eBay active-listing search routes live in `functions/api/` and run as Cloudflare Pages Functions. They are disabled unless explicitly enabled. Configure these **server-side** variables/secrets in the Cloudflare Pages project (Settings → Variables and Secrets):
+The eBay deal-search route lives in `functions/api/` and runs as a Cloudflare Pages Function. It is disabled unless explicitly enabled. Configure these **server-side** variables/secrets in the Cloudflare Pages project (Settings → Variables and Secrets):
 
 - `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` — the same project URL and browser-safe publishable/anon key used by CACHE; routes validate the signed-in user's access token.
-- `ENABLE_AI_GENERATION=true`, `OPENAI_API_KEY` (secret), and `OPENAI_MODEL` — enables AI drafts. Use an available Responses API model that supports image input and structured outputs. Apply Cloudflare rate limiting to `/api/ai-draft` before enabling it, because each request uses paid API capacity.
-- `ENABLE_EBAY_DEAL_SEARCH=true`, `EBAY_CLIENT_ID`, and `EBAY_CLIENT_SECRET` (secret) — enables active listing search through eBay Browse API. The feature compares those listings with CACHE's own verified sales and manually recorded comps; it does not provide eBay sold-comparable data.
-- `ENABLE_CARD_PRICING=true` and `JUSTTCG_API_KEY` (secret) — enables the current JustTCG card-match and market-value lookup for supported TCGs. The card-price route uses JustTCG's v2 API, which is currently marked beta; graded prices are only available when that exact grade has recent sale coverage. CACHE saves a price only after the user selects a matching card and variant. Configure a paid plan with commercial rights before displaying provider data in a public/commercial CACHE service.
+- `ENABLE_EBAY_DEAL_SEARCH=true`, `EBAY_CLIENT_ID`, and `EBAY_CLIENT_SECRET` (secret) — enables active listing search through eBay Browse API. eBay requires Buy API production approval before production use; see its [Buy API requirements](https://developer.ebay.com/api-docs/buy/buy-requirements.html).
 
-After changing server settings, redeploy the Pages project. Keep eBay and AI secrets out of `supabase-config.js` and all browser files. eBay account linking and listing publishing are not enabled: they need seller OAuth, production API access, token storage, and the seller's shipping, return, and payment policies. Receipt/document uploads currently accept images because the existing private Storage bucket accepts JPEG images only; PDF support needs a bucket policy/configuration change.
+After changing server settings, redeploy the Pages project. Keep eBay secrets out of `supabase-config.js` and all browser files. eBay account linking and bulk listing publishing are not enabled: they need seller OAuth, production API access, token storage, and the seller's shipping, return, and payment policies. Receipt/document uploads currently accept images because the existing private Storage bucket accepts JPEG images only; PDF support needs a bucket policy/configuration change.
 
-Sports-card market values can be entered manually. Automatic sports-card pricing is not enabled because a provider with commercial display rights has not been selected.
+Recorded inventory values and sold comparisons are manual references. The deal finder uses eBay active listings and does not claim eBay sold-comparable access.

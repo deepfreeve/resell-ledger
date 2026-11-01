@@ -47,85 +47,62 @@ function normalizeFeatureKey(value) {
 function featurePriceComparables(search) {
   const key = normalizeFeatureKey(search.query);
   const condition = normalizeFeatureKey(search.condition || "any");
-  const recentDate = new Date();
-  recentDate.setDate(recentDate.getDate() - 365);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 365);
   const comps = data.priceComps
     .filter((comp) => normalizeFeatureKey(comp.product) === key)
     .filter((comp) => condition === "any" || normalizeFeatureKey(comp.condition) === condition)
-    .filter((comp) => !comp.soldDate || new Date(`${comp.soldDate}T00:00:00`) >= recentDate)
-    .map((comp) => ({ price: featureNum(comp.price), date: comp.soldDate || "", condition: comp.condition, source: comp.source || "Manual comp" }));
+    .filter((comp) => !comp.soldDate || new Date(`${comp.soldDate}T00:00:00`) >= cutoff)
+    .map((comp) => ({ price: featureNum(comp.price), date: comp.soldDate || "", condition: comp.condition, source: comp.source || "Manual comparison" }));
   for (const sale of featurePaidSales()) {
     const item = data.items.find((entry) => entry.id === sale.itemId);
     if (!item || item.purchaseCostEstimated || item.purchaseCostUnknown) continue;
     const saleKey = normalizeFeatureKey(item.marketComparableKey || item.name);
     if (saleKey !== key) continue;
     if (condition !== "any" && normalizeFeatureKey(item.itemCondition) !== condition) continue;
-    if (sale.saleDate && new Date(`${sale.saleDate}T00:00:00`) < recentDate) continue;
+    if (sale.saleDate && new Date(`${sale.saleDate}T00:00:00`) < cutoff) continue;
     comps.push({ price: featureNum(sale.salePrice), date: sale.saleDate || "", condition: item.itemCondition || "Not specified", source: sale.source === "ebay" ? "Imported eBay sale" : "CACHE sale" });
   }
   return comps.filter((comp) => comp.price > 0);
 }
 
-function assessPossibleDeal(listing, search) {
-  const comps = featurePriceComparables(search).map((entry) => entry.price).sort((a, b) => a - b);
-  const median = comps.length ? comps[Math.floor((comps.length - 1) / 2)] : 0;
-  const price = featureNum(listing.price);
-  const shipping = featureNum(listing.shipping);
-  const allIn = featureRound(price + shipping);
-  const feePercent = featureNum(search.feePercent ?? data.settings.defaultFeePercent);
-  const outbound = featureNum(data.settings.defaultOutgoingShipping);
-  const expectedNet = featureRound(median - median * feePercent / 100 - outbound);
+function assessDeal(listing, search) {
+  const prices = featurePriceComparables(search).map((entry) => entry.price).sort((a, b) => a - b);
+  const median = prices.length ? prices[Math.floor((prices.length - 1) / 2)] : 0;
+  const shipping = Number.isFinite(listing.shipping) ? listing.shipping : 0;
+  const allIn = featureRound(listing.price + shipping);
+  const feeRate = Math.max(0, Math.min(100, featureNum(search.feePercent ?? data.settings.defaultFeePercent))) / 100;
+  const expectedNet = featureRound(median - median * feeRate - featureNum(data.settings.defaultOutgoingShipping));
   const profit = featureRound(expectedNet - allIn);
   const roi = allIn > 0 ? featureRound(profit / allIn * 100) : 0;
-  const minimumComps = Math.max(1, featureNum(search.minimumComps) || 3);
-  const conditionMatch = search.condition === "any" || normalizeFeatureKey(search.condition) === normalizeFeatureKey(listing.condition || "");
-  const terms = normalizeFeatureKey(search.query).split(" ").filter((word) => word.length > 1);
-  const title = normalizeFeatureKey(listing.title);
-  const matchedWords = terms.filter((word) => title.includes(word)).length;
-  const matchRatio = terms.length ? matchedWords / terms.length : 0;
-  const matchConfidence = conditionMatch && matchRatio >= 0.9 ? "Strong title/condition match" : (matchRatio >= 0.6 ? "Review title and condition" : "Weak product match");
-  const good = comps.length >= minimumComps && conditionMatch && matchRatio >= 0.9 && allIn <= featureNum(search.maxCost) && shipping <= featureNum(search.maxShipping) && profit >= featureNum(search.minProfit) && roi >= featureNum(search.minRoi);
-  return { comps: comps.length, median, allIn, expectedNet, profit, roi, conditionMatch, matchConfidence, good, comparableCount: comps.length };
+  const enough = prices.length >= Math.max(1, featureNum(search.minimumComps) || 3);
+  return { count: prices.length, median, allIn, profit, roi, enough, good: enough && profit >= featureNum(search.minProfit) && roi >= featureNum(search.minRoi) && allIn <= featureNum(search.maxCost) && shipping <= featureNum(search.maxShipping) };
 }
 
 function renderDealSearches() {
   const container = $("#dealSearchList");
   if (!container) return;
-  container.innerHTML = data.dealSearches.length ? data.dealSearches.map((search) => {
-    const comps = featurePriceComparables(search);
-    const median = comps.map((comp) => comp.price).sort((a, b) => a - b)[Math.floor((comps.length - 1) / 2)] || 0;
-    return `<article class="feature-row"><div><strong>${featureEsc(search.query)}</strong><p>${featureEsc(search.condition)} · max all-in ${money(search.maxCost)} · min profit ${money(search.minProfit)} · ${comps.length} matching comps${comps.length ? ` · median ${money(median)}` : ""}</p><small>${search.active === false ? "Paused" : "Watching while CACHE is open"}${search.lastCheckedAt ? ` · checked ${featureEsc(formatDate(search.lastCheckedAt.slice(0, 10)))}` : ""}</small></div><div class="feature-row-actions"><button class="secondary-button" type="button" data-run-deal="${featureEsc(search.id)}">Search eBay</button><button class="secondary-button" type="button" data-pause-deal="${featureEsc(search.id)}">${search.active === false ? "Resume" : "Pause"}</button><button class="danger-button" type="button" data-delete-deal="${featureEsc(search.id)}">Delete</button></div></article>`;
-  }).join("") : '<p class="muted-text">Save a search to start building a selective deal watchlist.</p>';
+  container.innerHTML = data.dealSearches.length ? data.dealSearches.map((search) => `<article class="feature-row"><div><strong>${featureEsc(search.query)}</strong><p>${featureEsc(search.condition || "any")} · max total ${money(search.maxCost)} · min profit ${money(search.minProfit)} · min ROI ${featurePercent(search.minRoi || 0)} · ${featureNum(search.minimumComps) || 3} comparisons</p></div><div class="feature-row-actions"><button class="secondary-button" type="button" data-run-deal="${featureEsc(search.id)}">Search</button><button class="danger-button" type="button" data-delete-deal="${featureEsc(search.id)}">Remove</button></div></article>`).join("") : "";
 }
 
-function renderDealResults(listings = [], search = null, note = "") {
+function renderDealResults(listings, search, note = "") {
   const container = $("#dealResults");
   if (!container) return;
   if (!listings.length) {
-    container.innerHTML = note ? `<p class="field-hint">${featureEsc(note)}</p>` : "";
+    container.innerHTML = `<p class="field-hint">${featureEsc(note || "No eBay listings matched. Try another name or loosen the limits.")}</p>`;
     return;
   }
-  const scored = listings.map((listing) => ({ listing, assessment: assessPossibleDeal(listing, search || {}) }));
-  const reliable = scored.filter(({ assessment }) => assessment.comps >= Math.max(1, featureNum(search?.minimumComps) || 3));
-  const good = reliable.filter(({ assessment }) => assessment.good);
-  const weak = scored.filter(({ assessment }) => assessment.comps < Math.max(1, featureNum(search?.minimumComps) || 3));
-  container.innerHTML = `${note ? `<p class="field-hint">${featureEsc(note)}</p>` : ""}${good.length ? `<h3>Possible deals that match your rules</h3>` : ""}${scored.map(({ listing, assessment }) => `<article class="deal-card ${assessment.good ? "deal-card-match" : ""}">${listing.imageUrl ? `<img src="${featureEsc(listing.imageUrl)}" alt="" loading="lazy">` : ""}<div class="deal-card-main"><strong>${featureEsc(listing.title)}</strong><span>${featureEsc(listing.condition || "Condition not listed")} · ${money(listing.price)} + ${money(listing.shipping)} shipping</span><span>${assessment.comps >= (featureNum(search?.minimumComps) || 3) ? `${assessment.good ? "Possible deal" : "Does not meet your rules"} · est. profit ${money(assessment.profit)} · ROI ${featurePercent(assessment.roi)}` : "Not scored: not enough matching sold comparisons"}</span><small>${assessment.comparableCount} comps · ${featureEsc(assessment.matchConfidence)} · comps from the last 12 months</small><a class="secondary-button" href="${featureEsc(listing.url)}" target="_blank" rel="noopener noreferrer">Review on eBay</a></div></article>`).join("")}${weak.length ? `<p class="field-hint">${weak.length} listing(s) have too few comparable sales to score. CACHE will not flag those as deals.</p>` : ""}`;
-  if (good.length && search?.alertsEnabled && "Notification" in window && Notification.permission === "granted") {
-    const ids = new Set(search.alertedListingIds || []);
-    for (const { listing } of good) {
-      if (ids.has(listing.id)) continue;
-      new Notification("Possible CACHE deal", { body: `${listing.title} · ${money(listing.price + listing.shipping)} all-in` });
-      ids.add(listing.id);
-    }
-    search.alertedListingIds = [...ids].slice(-200);
-    search.lastAlertAt = new Date().toISOString();
-    saveData();
-  }
+  container.innerHTML = `${note ? `<p class="field-hint">${featureEsc(note)}</p>` : ""}${listings.map((listing) => {
+    const assessment = assessDeal(listing, search);
+    const verdict = assessment.enough
+      ? `${assessment.good ? "Possible deal" : "Review price"} · est. profit ${money(assessment.profit)} · ROI ${featurePercent(assessment.roi)} · median comparison ${money(assessment.median)}`
+      : `Price only · add ${Math.max(0, (featureNum(search.minimumComps) || 3) - assessment.count)} more close sold comparison(s) before CACHE estimates profit`;
+    const shipping = Number.isFinite(listing.shipping) ? money(listing.shipping) : "not shown";
+    return `<article class="deal-card ${assessment.good ? "deal-card-match" : ""}">${listing.imageUrl ? `<img src="${featureEsc(listing.imageUrl)}" alt="" loading="lazy">` : ""}<div class="deal-card-main"><strong>${featureEsc(listing.title)}</strong><span>${featureEsc(listing.condition || "Condition not listed")} · ${money(listing.price)} + ${shipping} shipping</span><span>Total shown: ${Number.isFinite(listing.shipping) ? money(assessment.allIn) : "shipping unknown"}</span><small>${featureEsc(verdict)}</small><a class="secondary-button" href="${featureEsc(listing.url)}" target="_blank" rel="noopener noreferrer">Review on eBay</a></div></article>`;
+  }).join("")}`;
 }
 
-async function runDealSearch(searchId) {
-  const search = data.dealSearches.find((entry) => entry.id === searchId);
-  if (!search) return;
+async function runDealSearch(search) {
   const results = $("#dealResults");
   results.innerHTML = '<p class="field-hint">Checking current eBay listings…</p>';
   try {
@@ -133,13 +110,21 @@ async function runDealSearch(searchId) {
     const response = await fetch(cacheApiUrl("/api/deal-search"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
-      body: JSON.stringify({ query: search.query, condition: search.condition, marketplace: search.marketplace || "EBAY_US", limit: 40 })
+      body: JSON.stringify({ query: search.query, marketplace: search.marketplace || "EBAY_US", limit: 40 })
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "eBay search is not configured yet.");
-    search.lastCheckedAt = new Date().toISOString();
-    featurePersist();
-    renderDealResults(payload.items || [], search, "Current listings are compared with this account's recorded sales and manual comps. eBay sold-price data is not included unless an approved source is configured.");
+    const condition = normalizeFeatureKey(search.condition || "any");
+    const matches = (payload.items || []).filter((listing) => {
+      if (!Number.isFinite(listing.shipping) && featureNum(search.maxCost) > 0) return false;
+      const itemCondition = normalizeFeatureKey(listing.condition);
+      const title = normalizeFeatureKey(listing.title);
+      const graded = /\b(psa|bgs|cgc|sgc)\s?\d/.test(title);
+      const conditionOk = condition === "any" || (condition === "graded" ? graded : `${itemCondition} ${title}`.includes(condition));
+      const total = listing.price + (Number.isFinite(listing.shipping) ? listing.shipping : 0);
+      return conditionOk && total <= featureNum(search.maxCost) && (!Number.isFinite(listing.shipping) || listing.shipping <= featureNum(search.maxShipping));
+    });
+    renderDealResults(matches, search, "Live eBay asking prices are not sold prices. Profit estimates use only your saved close comparisons and known-cost CACHE sales.");
   } catch (error) {
     console.error("CACHE eBay deal search failed:", error);
     renderDealResults([], search, error.message || "Could not search eBay right now. Check the eBay setup and try again.");
@@ -149,7 +134,7 @@ async function runDealSearch(searchId) {
 function renderSourcingLists() {
   renderDealSearches();
   const comps = $("#priceCompList");
-  if (comps) comps.innerHTML = data.priceComps.length ? [...data.priceComps].sort((a, b) => (b.soldDate || "").localeCompare(a.soldDate || "")).map((comp) => `<article class="feature-row"><div><strong>${featureEsc(comp.product)}</strong><p>${featureEsc(comp.condition)} · ${money(comp.price)} · ${featureEsc(formatDate(comp.soldDate))} · ${featureEsc(comp.source || "Manual comp")}</p></div><button class="danger-button" type="button" data-delete-comp="${featureEsc(comp.id)}">Remove</button></article>`).join("") : '<p class="muted-text">Add verified sold comparisons to improve deal scoring.</p>';
+  if (comps) comps.innerHTML = data.priceComps.length ? [...data.priceComps].sort((a, b) => (b.soldDate || "").localeCompare(a.soldDate || "")).map((comp) => `<article class="feature-row"><div><strong>${featureEsc(comp.product)}</strong><p>${featureEsc(comp.condition)} · ${money(comp.price)} · ${featureEsc(formatDate(comp.soldDate))} · ${featureEsc(comp.source || "Manual comp")}</p></div><button class="danger-button" type="button" data-delete-comp="${featureEsc(comp.id)}">Remove</button></article>`).join("") : '<p class="muted-text">Save sale prices you have verified as a personal reference.</p>';
   const sources = $("#sourceLogList");
   if (sources) sources.innerHTML = data.sourcingLog.length ? [...data.sourcingLog].sort((a, b) => b.date.localeCompare(a.date)).map((entry) => {
     const linked = data.items.filter((item) => normalizeFeatureKey(item.purchaseSource) === normalizeFeatureKey(entry.source));
@@ -163,21 +148,6 @@ function renderSourcingLists() {
     const profit = featureRound(net - allIn);
     return `<article class="feature-row"><div><strong>${featureEsc(plan.name)}</strong><p>All-in ${money(allIn)} · expected net ${money(net)} · margin ${money(profit)}${allIn ? ` · ROI ${featurePercent(profit / allIn * 100)}` : ""}</p></div><button class="danger-button" type="button" data-delete-plan="${featureEsc(plan.id)}">Remove</button></article>`;
   }).join("") : '<p class="muted-text">Save a buy plan to compare estimated margin before purchasing.</p>';
-}
-
-function renderListingDrafts() {
-  const container = $("#listingDraftList");
-  if (!container) return;
-  container.innerHTML = data.listingDrafts.length ? data.listingDrafts.map((draft) => {
-    const missing = [];
-    if (!(draft.photos || []).length) missing.push("photo");
-    if (!String(draft.title || "").trim()) missing.push("title");
-    if (!String(draft.condition || "").trim() || draft.condition === "Not specified") missing.push("condition");
-    if (draft.listedPrice == null || !Number.isFinite(Number(draft.listedPrice)) || Number(draft.listedPrice) <= 0) missing.push("price");
-    const readiness = missing.length ? `Needs review: ${missing.join(", ")}` : "Ready for seller review";
-    return `<article class="draft-card" data-draft-card="${featureEsc(draft.id)}"><label class="draft-select"><input type="checkbox" data-select-draft="${featureEsc(draft.id)}"> Select to combine</label>${(draft.photos || []).slice(0, 4).map((photo) => photo.startsWith("data:") ? `<img src="${featureEsc(photo)}" alt="Product photo" loading="lazy">` : `<img data-photo-path="${featureEsc(photo)}" alt="Product photo" loading="lazy">`).join("")}<label class="field">Title<input data-draft-field="title" data-draft-id="${featureEsc(draft.id)}" maxlength="140" value="${featureEsc(draft.title)}"></label><div class="form-row"><label class="field">Category<select data-draft-field="category" data-draft-id="${featureEsc(draft.id)}">${Object.entries(CATEGORY_NAMES).map(([id, name]) => `<option value="${featureEsc(id)}" ${draft.category === id ? "selected" : ""}>${featureEsc(name)}</option>`).join("")}</select></label><label class="field">Condition<input data-draft-field="condition" data-draft-id="${featureEsc(draft.id)}" value="${featureEsc(draft.condition || "Not specified")}"></label></div><label class="field">Description<textarea data-draft-field="description" data-draft-id="${featureEsc(draft.id)}" rows="4" maxlength="4000">${featureEsc(draft.description || "")}</textarea></label><label class="field">Suggested listed price ($)<input data-draft-field="listedPrice" data-draft-id="${featureEsc(draft.id)}" type="number" min="0" step="0.01" value="${draft.listedPrice == null ? "" : featureEsc(draft.listedPrice)}"></label><p class="draft-readiness ${missing.length ? "needs-review" : "ready"}">${featureEsc(readiness)}</p><div class="draft-missing-fields"><strong>Required before inventory:</strong><label class="field">Actual bought cost ($)<input data-draft-purchase-cost="${featureEsc(draft.id)}" type="number" min="0" step="0.01" placeholder="Enter actual cost"></label><label class="field">Actual purchase date<input data-draft-purchase-date="${featureEsc(draft.id)}" type="date"></label><small>These values are never generated. Enter them when you know them.</small></div><div class="detail-actions"><button class="primary-button" type="button" data-draft-inventory="${featureEsc(draft.id)}" ${draft.inventoryItemId ? "disabled" : ""}>${draft.inventoryItemId ? "Added to inventory" : "Create inventory item"}</button><button class="secondary-button" type="button" data-split-draft="${featureEsc(draft.id)}" ${(draft.photos || []).length > 1 ? "" : "disabled"}>Split photos</button><button class="danger-button" type="button" data-delete-draft="${featureEsc(draft.id)}">Delete draft</button></div><p class="field-hint">Draft only. Publishing is unavailable until eBay app credentials and account connection are configured.</p></article>`;
-  }).join("") : '<div class="empty-state"><h3>No listing drafts yet</h3><p>Upload product photos for AI suggestions or create a manual draft.</p></div>';
-  hydratePhotos(container);
 }
 
 function renderBusinessTools() {
@@ -202,6 +172,195 @@ function renderBusinessTools() {
   renderDocuments();
   updateFeeEstimator();
 }
+
+let ebayActiveRows = [];
+let ebayActiveCostPercent = 50;
+
+function parseEbayActiveCsv(text) {
+  if (text.length > 20_000_000) throw new Error("This CSV is too large to preview. Export a smaller report and try again.");
+  const rows = parseCsv(text);
+  const headerIndex = rows.findIndex((row) => {
+    const headers = row.map(normalizeCsvHeader);
+    const hasTitle = headers.some((value) => ["title", "itemtitle", "listingtitle", "item"].includes(value) || value.startsWith("itemtitle"));
+    const hasPrice = headers.some((value) => ["currentprice", "buyitnowprice", "listingprice", "startprice", "price", "itemprice"].includes(value) || value.startsWith("currentprice"));
+    return hasTitle && hasPrice;
+  });
+  if (headerIndex < 0) throw new Error("I couldn't find listing title and current price columns. Choose an eBay Active Listings CSV report.");
+
+  const headers = rows[headerIndex];
+  const titleColumn = findCsvColumn(headers, ["itemtitle", "listingtitle", "title", "item"]);
+  const priceColumn = findCsvColumn(headers, ["currentprice", "buyitnowprice", "listingprice", "startprice", "itemprice", "price"]);
+  const skuColumn = findCsvColumn(headers, ["customlabelsku", "customlabel", "sku"]);
+  const idColumn = findCsvColumn(headers, ["ebayitemid", "itemnumber", "listingid"]);
+  const conditionColumn = findCsvColumn(headers, ["condition"]);
+  const categoryColumn = findCsvColumn(headers, ["ebaycategory1name", "ebaycategory2name", "categoryname", "category"]);
+  const quantityColumn = findCsvColumn(headers, ["availablequantity", "quantityavailable", "quantity", "qty"]);
+  const currencyColumn = findCsvColumn(headers, ["currency"]);
+  const urlColumn = findCsvColumn(headers, ["listingurl", "itemurl", "url"]);
+  const seen = new Set();
+  const existingIds = new Set(data.items.map((item) => String(item.ebayItemId || "").trim()).filter(Boolean));
+  const existingSkus = new Set(data.items.map((item) => String(item.sku || "").trim().toLowerCase()).filter(Boolean));
+  const existingListings = new Set(data.items.filter((item) => !item.ebayItemId && !item.sku).map((item) => `${normalizeFeatureKey(item.name)}|${featureNum(item.listedPrice).toFixed(2)}`));
+
+  return rows.slice(headerIndex + 1).map((cells, offset) => {
+    const value = (column) => column < 0 ? "" : String(cells[column] || "").trim();
+    const title = value(titleColumn);
+    const listingId = value(idColumn);
+    const sku = value(skuColumn);
+    const price = parseCsvMoney(value(priceColumn));
+    const quantityValue = quantityColumn < 0 || !value(quantityColumn) ? 1 : Number.parseInt(value(quantityColumn), 10);
+    const quantity = Number.isInteger(quantityValue) && quantityValue > 0 && quantityValue <= 500 ? quantityValue : 0;
+    const currency = value(currencyColumn).toUpperCase();
+    const key = listingId ? `id:${listingId}` : sku ? `sku:${sku.toLowerCase()}` : `listing:${normalizeFeatureKey(title)}|${Number(price || 0).toFixed(2)}`;
+    const isDuplicate = Boolean(title && (seen.has(key) || (listingId && existingIds.has(listingId)) || (sku && existingSkus.has(sku.toLowerCase())) || (!listingId && !sku && existingListings.has(`${normalizeFeatureKey(title)}|${Number(price || 0).toFixed(2)}`))));
+    if (title && key) seen.add(key);
+    const state = !title || price === null || price < 0 || !quantity ? "invalid" : (currency && currency !== "USD") ? "unsupported-currency" : isDuplicate ? "duplicate" : "ready";
+    return {
+      rowNumber: headerIndex + offset + 2,
+      title,
+      listingId,
+      sku,
+      condition: value(conditionColumn),
+      category: value(categoryColumn),
+      currency,
+      url: value(urlColumn),
+      listedPrice: price,
+      quantity: quantity || 1,
+      purchaseCost: price === null ? 0 : featureRound(price * ebayActiveCostPercent / 100),
+      purchaseCostEstimated: true,
+      state,
+      include: state === "ready"
+    };
+  }).filter((row) => row.title || row.listedPrice !== null);
+}
+
+function ebayInventoryCategory(categoryName) {
+  const category = normalizeFeatureKey(categoryName);
+  if (/pokemon|pokemon card/.test(category)) return "pokemon";
+  if (/sport|baseball|basketball|football|hockey card/.test(category)) return "sports";
+  if (/trading card|collectible card|tcg/.test(category)) return "trading";
+  if (/video game|video games|gaming/.test(category)) return "videogames";
+  if (/electronics|computer|phone|audio/.test(category)) return "electronics";
+  if (/clothing|apparel|shoes|fashion/.test(category)) return "clothing";
+  if (/collectible|memorabilia|toy|antique/.test(category)) return "collectibles";
+  return "other";
+}
+
+function renderEbayActivePreview() {
+  const preview = $("#ebayActivePreview");
+  if (!preview) return;
+  const ready = ebayActiveRows.filter((row) => row.state === "ready");
+  const selected = ready.filter((row) => row.include).length;
+  const status = (row) => row.state === "duplicate" ? "Already in inventory" : row.state === "unsupported-currency" ? `Currency ${row.currency} not supported` : row.state === "invalid" ? "Missing title, price, or quantity must be 1–500" : row.state === "imported" ? "Added to inventory" : row.purchaseCostEstimated ? "Estimated cost" : "Cost edited";
+  preview.innerHTML = ebayActiveRows.length ? `<table class="report-table ebay-active-preview-table"><thead><tr><th><input type="checkbox" data-ebay-active-select-all aria-label="Select all importable listings" ${ready.length && selected === ready.length ? "checked" : ""} ${ready.length ? "" : "disabled"}></th><th>Active listing</th><th>Condition</th><th>Listed price</th><th>Bought cost</th><th>Import status</th></tr></thead><tbody>${ebayActiveRows.map((row, index) => `<tr><td><input type="checkbox" data-ebay-active-row="${index}" aria-label="Select ${featureEsc(row.title)}" ${row.include ? "checked" : ""} ${row.state === "ready" ? "" : "disabled"}></td><td>${featureEsc(row.title)}${row.sku ? `<small class="import-sku">SKU ${featureEsc(row.sku)}</small>` : ""}${row.listingId ? `<small class="import-sku">eBay #${featureEsc(row.listingId)} · qty ${row.quantity}</small>` : `<small class="import-sku">Qty ${row.quantity}</small>`}</td><td>${featureEsc(row.condition || "Not specified")}</td><td>${money(row.listedPrice)}</td><td><input class="ebay-cost-input" type="number" min="0" step="0.01" aria-label="Estimated bought cost for ${featureEsc(row.title)}" data-ebay-active-cost="${index}" value="${featureNum(row.purchaseCost).toFixed(2)}" ${row.state === "ready" ? "" : "disabled"}><small class="import-sku">${row.purchaseCostEstimated ? `${ebayActiveCostPercent}% of listed price · estimate` : "Manually entered"}</small></td><td>${status(row)}</td></tr>`).join("")}</tbody></table>` : "";
+  const skipped = ebayActiveRows.filter((row) => ["duplicate", "invalid", "unsupported-currency"].includes(row.state)).length;
+  $("#ebayActiveImportSummary").textContent = ebayActiveRows.length ? `${ebayActiveRows.length} listing rows · ${selected} selected · ${skipped} duplicate or invalid rows skipped. The percentage estimates per-unit cost from listed price; it is not an actual purchase record.` : "";
+  $("#importEbayActiveButton").disabled = selected === 0;
+  $("#cancelEbayActiveButton").hidden = ebayActiveRows.length === 0;
+}
+
+$("#ebayActiveCsvFile").addEventListener("change", async (event) => {
+  const file = event.currentTarget.files?.[0];
+  if (!file) return;
+  try {
+    ebayActiveCostPercent = Number($("#ebayActiveCostPercent").value);
+    ebayActiveRows = parseEbayActiveCsv(await file.text());
+    $("#ebayActiveImportSummary").classList.remove("error");
+    renderEbayActivePreview();
+  } catch (error) {
+    ebayActiveRows = [];
+    renderEbayActivePreview();
+    $("#ebayActiveImportSummary").textContent = error.message || "Could not read this eBay report.";
+    $("#ebayActiveImportSummary").classList.add("error");
+  }
+});
+
+$("#ebayActiveCostPercent").addEventListener("input", (event) => {
+  ebayActiveCostPercent = Math.max(0, Math.min(100, featureNum(event.currentTarget.value)));
+  $("#ebayActiveCostLabel").textContent = `${ebayActiveCostPercent}% of listed price`;
+  ebayActiveRows.forEach((row) => {
+    if (row.state === "ready" && row.purchaseCostEstimated) row.purchaseCost = featureRound(row.listedPrice * ebayActiveCostPercent / 100);
+  });
+  renderEbayActivePreview();
+});
+
+$("#ebayActivePreview").addEventListener("input", (event) => {
+  const target = event.target;
+  if (!target.matches("[data-ebay-active-cost]")) return;
+  const row = ebayActiveRows[Number(target.dataset.ebayActiveCost)];
+  const cost = Number(target.value);
+  if (!row) return;
+  if (target.value === "") row.purchaseCost = "";
+  else if (Number.isFinite(cost) && cost >= 0) row.purchaseCost = featureRound(cost);
+  else return;
+  row.purchaseCostEstimated = false;
+  const label = target.parentElement.querySelector(".import-sku");
+  if (label) label.textContent = "Manually entered";
+  const statusCell = target.closest("tr")?.lastElementChild;
+  if (statusCell) statusCell.textContent = "Cost edited";
+});
+
+$("#ebayActivePreview").addEventListener("change", (event) => {
+  if (event.target.matches("[data-ebay-active-row]")) {
+    ebayActiveRows[Number(event.target.dataset.ebayActiveRow)].include = event.target.checked;
+    renderEbayActivePreview();
+  }
+  if (event.target.matches("[data-ebay-active-select-all]")) {
+    ebayActiveRows.forEach((row) => { if (row.state === "ready") row.include = event.target.checked; });
+    renderEbayActivePreview();
+  }
+});
+
+$("#importEbayActiveButton").addEventListener("click", () => {
+  const selected = ebayActiveRows.filter((row) => row.state === "ready" && row.include);
+  if (!selected.length) return;
+  if (selected.some((row) => row.purchaseCost === "" || !Number.isFinite(Number(row.purchaseCost)) || Number(row.purchaseCost) < 0)) {
+    $("#ebayActiveImportSummary").textContent = "Enter a valid nonnegative bought cost for each selected listing.";
+    $("#ebayActiveImportSummary").classList.add("error");
+    return;
+  }
+  const previousData = JSON.parse(JSON.stringify(data));
+  let importedUnits = 0;
+  try {
+    for (const row of selected) {
+      for (let copy = 0; copy < row.quantity; copy += 1) {
+        data.items.push({
+          id: makeId(), name: row.title, sku: row.sku, ebayItemId: row.listingId || "", ebayListingUrl: row.url || "",
+          productCategory: ebayInventoryCategory(row.category), listedPrice: featureRound(row.listedPrice), purchaseCost: featureRound(row.purchaseCost),
+          purchaseCostUnknown: false, purchaseCostEstimated: Boolean(row.purchaseCostEstimated), purchaseDate: "",
+          itemCondition: row.condition || "Not specified", ownershipType: "owned", consignmentPercent: 0,
+          photo: "", listedAt: new Date().toISOString(), priceHistory: [],
+          purchaseSource: "eBay active listings import",
+          notes: row.purchaseCostEstimated
+            ? `Imported from an eBay active listings report. Bought cost is an estimate (${ebayActiveCostPercent}% of listed price); replace it with the actual amount paid when known.`
+            : "Imported from an eBay active listings report. Entered bought cost manually.",
+          createdAt: new Date().toISOString()
+        });
+        importedUnits += 1;
+      }
+      row.state = "imported";
+      row.include = false;
+    }
+    if (!saveData()) throw new Error("Sign in before importing listings.");
+    renderAll();
+    renderEbayActivePreview();
+    $("#ebayActiveImportSummary").textContent = `${importedUnits} active listing${importedUnits === 1 ? "" : "s"} added to inventory. Estimated costs are labeled; add actual costs when you know them.`;
+    $("#ebayActiveImportSummary").classList.remove("error");
+  } catch (error) {
+    data = normalizeData(previousData);
+    selected.forEach((row) => { if (row.state === "imported") { row.state = "ready"; row.include = true; } });
+    renderEbayActivePreview();
+    $("#ebayActiveImportSummary").textContent = error.message || "Could not import the selected listings.";
+    $("#ebayActiveImportSummary").classList.add("error");
+  }
+});
+
+$("#cancelEbayActiveButton").addEventListener("click", () => {
+  ebayActiveRows = [];
+  $("#ebayActiveCsvFile").value = "";
+  $("#ebayActiveImportSummary").classList.remove("error");
+  renderEbayActivePreview();
+});
 
 function renderGoals() {
   const container = $("#goalList");
@@ -264,83 +423,14 @@ function renderDocuments() {
   container.innerHTML = data.documents.length ? data.documents.map((document) => `<article class="feature-row"><div><strong>${featureEsc(document.title)}</strong><p>${featureEsc(featureItemName(document.itemId))} · ${featureEsc(document.kind)} · ${featureEsc(formatDate(document.date))}</p></div><button class="secondary-button" type="button" data-open-document="${featureEsc(document.id)}">Open</button><button class="danger-button" type="button" data-delete-document="${featureEsc(document.id)}">Remove</button></article>`).join("") : '<p class="muted-text">Attach scanned receipt, grading, or shipping documents to an item.</p>';
 }
 
-const marketLookupCandidates = new Map();
-
-function marketConfidence(sales90d) {
-  if (sales90d >= 10) return "Strong recent sale activity";
-  if (sales90d >= 3) return "Some recent sale activity";
-  if (sales90d > 0) return "Limited recent sale activity";
-  return "Sale count unavailable";
-}
-
 function renderMarketValuePanel(item) {
   const hasValue = item.marketValue !== undefined && item.marketValue !== null && item.marketValue !== "" && Number.isFinite(Number(item.marketValue));
-  const cardGame = item.cardGame || (item.productCategory === "pokemon" ? "pokemon" : "other");
-  const supportedGame = item.productCategory !== "sports" && cardGame !== "other";
-  const timestamp = item.marketValueUpdatedAt ? new Date(item.marketValueUpdatedAt).toLocaleString() : "";
-  const matchName = item.marketProviderCardName || "Manual value";
+  const timestamp = item.marketValueUpdatedAt ? new Date(item.marketValueUpdatedAt).toLocaleDateString() : "";
   const history = (Array.isArray(item.marketPriceHistory) ? item.marketPriceHistory : []).slice(-5).reverse();
-  return `<section class="market-value-panel"><div class="panel-heading"><div><p class="eyebrow">CARD VALUE</p><h3>${hasValue ? money(item.marketValue) : "No value saved"}</h3></div>${item.marketValueSource ? `<span class="market-source-pill">${featureEsc(item.marketValueSource)}</span>` : ""}</div>
-    ${hasValue ? `<p class="field-hint">${featureEsc(matchName)}${item.marketValueCondition ? ` · ${featureEsc(item.marketValueCondition)}` : ""}${item.marketValuePrinting ? ` · ${featureEsc(item.marketValuePrinting)}` : ""}${item.marketValueLanguage ? ` · ${featureEsc(item.marketValueLanguage)}` : ""}${timestamp ? ` · price date ${featureEsc(timestamp)}` : ""}${item.marketPriceStatus ? ` · ${featureEsc(item.marketPriceStatus)}` : ""}${item.marketConfidence ? ` · ${featureEsc(item.marketConfidence)}` : ""}${item.marketSales90d ? ` · ${item.marketSales90d} sales in 90 days` : ""}</p>` : '<p class="field-hint">Market values are separate from your bought cost and listed price.</p>'}
-    ${supportedGame ? `<button class="secondary-button" type="button" data-market-search="${featureEsc(item.id)}" data-market-refresh="${featureEsc(item.marketProviderVariantId || "")}">${item.marketProviderVariantId ? "Refresh TCG value" : "Find TCG market value"}</button><p class="field-hint">Provider matches are suggestions. Confirm the exact card, set, number, printing, language, and condition or grade before saving.</p>` : `<p class="field-hint">Automatic pricing is not available for this card type yet. You can record a value manually; sports-card API pricing needs a licensed source.</p>`}
-    <form class="market-manual-form" data-market-manual="${featureEsc(item.id)}"><label class="field">Market value ($)<input name="value" type="number" min="0" step="0.01" value="${hasValue ? featureEsc(item.marketValue) : ""}" required></label><button class="secondary-button" type="submit">Save manual value</button></form>
-    ${item.marketValueSource === "JustTCG" ? '<button class="text-button market-clear-button" type="button" data-market-clear="' + featureEsc(item.id) + '">Remove saved provider value</button>' : ""}
-    ${history.length ? `<div class="market-history"><strong>Recent value history</strong>${history.map((entry) => `<span>${money(entry.value)} · ${featureEsc(entry.source || "Manual")} · ${featureEsc(new Date(entry.recordedAt).toLocaleDateString())}</span>`).join("")}</div>` : ""}
-    <div class="market-search-results" data-market-results="${featureEsc(item.id)}" aria-live="polite"></div></section>`;
-}
-
-function marketCandidateMarkup(item, card) {
-  const wantedType = item.cardType === "graded" ? "graded" : "raw";
-  const variants = (card.variants || []).filter((variant) => {
-    if (variant.type !== wantedType) return false;
-    if (wantedType === "graded") {
-      const expectedGrade = `${item.gradingCompany || ""} ${item.cardGrade || ""}`.trim().toLowerCase();
-      if (variant.grade.toLowerCase() !== expectedGrade) return false;
-    } else if (item.itemCondition && item.itemCondition !== "Not specified" && normalizeFeatureKey(variant.condition) !== normalizeFeatureKey(item.itemCondition)) return false;
-    if (item.cardPrinting && variant.printing && normalizeFeatureKey(variant.printing) !== normalizeFeatureKey(item.cardPrinting)) return false;
-    if (item.cardLanguage && variant.language && normalizeFeatureKey(variant.language) !== normalizeFeatureKey(item.cardLanguage)) return false;
-    return true;
-  });
-  const identityParts = [card.set, card.number && `#${card.number}`, card.rarity].filter(Boolean);
-  const options = variants.map((variant) => {
-    const token = featureId();
-    marketLookupCandidates.set(token, { itemId: item.id, card, variant });
-    const descriptor = wantedType === "graded" ? variant.grade : [variant.condition, variant.printing, variant.language].filter(Boolean).join(" · ");
-    const current = variant.priceStatus === "current" && Number.isFinite(variant.price) && variant.price >= 0;
-    return `<article class="market-variant-row"><div><strong>${featureEsc(descriptor || "Variant details incomplete")}</strong><p>${variant.price == null ? (variant.lastPrice == null ? "No provider value" : `Last recorded ${money(variant.lastPrice)} · expired`) : `${money(variant.price)} ${featureEsc(variant.currency)}`}${variant.sales90d ? ` · ${variant.sales90d} sales in 90 days` : ""}</p><small>${featureEsc(marketConfidence(variant.sales90d))}${variant.updatedAt ? ` · provider updated ${featureEsc(new Date(variant.updatedAt * 1000).toLocaleDateString())}` : ""}</small></div><button class="secondary-button" type="button" data-market-select="${featureEsc(token)}" ${current ? "" : "disabled"}>${current ? "Use this value" : "No current price"}</button></article>`;
-  }).join("");
-  return `<article class="market-card-result"><strong>${featureEsc(card.name)}</strong><p>${identityParts.map(featureEsc).join(" · ") || "Set/number not listed"} · ${featureEsc(card.game)}</p>${variants.length ? options : '<p class="field-hint">No variant exactly matched the saved condition/grade and printing. Check the card details or enter a manual value.</p>'}</article>`;
-}
-
-async function searchMarketValue(itemId, variantId = "") {
-  const item = data.items.find((entry) => entry.id === itemId);
-  const results = document.querySelector(`[data-market-results="${CSS.escape(itemId)}"]`);
-  if (!item || !results) return;
-  const cardGame = item.cardGame || (item.productCategory === "pokemon" ? "pokemon" : "other");
-  if (item.productCategory === "sports" || cardGame === "other") {
-    results.innerHTML = '<p class="field-hint">Choose a supported TCG game for provider lookup. Sports cards can use a manual value until a commercial source is available.</p>';
-    return;
-  }
-  if (!variantId && !item.cardSet && !item.cardNumber) {
-    results.innerHTML = '<p class="field-hint">Add the card set or number in Edit Item to narrow the match before searching.</p>';
-    return;
-  }
-  results.innerHTML = '<p class="field-hint">Searching current TCG card values…</p>';
-  try {
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    const response = await fetch(cacheApiUrl("/api/card-price-search"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
-      body: JSON.stringify({ game: cardGame, name: item.name, set: item.cardSet, number: item.cardNumber, printing: item.cardPrinting, language: item.cardLanguage, itemCondition: item.itemCondition, cardType: item.cardType, gradingCompany: item.gradingCompany, grade: item.cardGrade, variantId })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "Card market lookup is not configured yet.");
-    const cards = payload.cards || [];
-    results.innerHTML = cards.length ? `<p class="field-hint">Review the exact printing and number. Only a price you select below will be attached to inventory.</p>${cards.map((card) => marketCandidateMarkup(item, card)).join("")}` : '<p class="field-hint">No card match was found. Add or correct its set and number, then search again.</p>';
-  } catch (error) {
-    console.error("Card market lookup failed:", error);
-    results.innerHTML = `<p class="field-hint error">${featureEsc(error.message || "Could not look up this card. Try again.")}</p>`;
-  }
+  return `<section class="market-value-panel"><div class="panel-heading"><div><p class="eyebrow">RECORDED VALUE</p><h3>${hasValue ? money(item.marketValue) : "No value saved"}</h3></div>${item.marketValueSource ? `<span class="market-source-pill">${featureEsc(item.marketValueSource)}</span>` : ""}</div>
+    ${hasValue ? `<p class="field-hint">Saved reference value${item.marketValueSource ? ` from ${featureEsc(item.marketValueSource)}` : ""}${item.marketValueCondition ? ` · ${featureEsc(item.marketValueCondition)}` : ""}${timestamp ? ` · updated ${featureEsc(timestamp)}` : ""}. This is not a live quote.</p>` : '<p class="field-hint">Enter your own estimate. CACHE does not fetch live market prices in this version.</p>'}
+    <form class="market-manual-form" data-market-manual="${featureEsc(item.id)}"><label class="field">Your value estimate ($)<input name="value" type="number" min="0" step="0.01" value="${hasValue ? featureEsc(item.marketValue) : ""}" required></label><button class="secondary-button" type="submit">Save value</button></form>
+    ${history.length ? `<div class="market-history"><strong>Recent recorded values</strong>${history.map((entry) => `<span>${money(entry.value)} · ${featureEsc(entry.source || "Manual")} · ${featureEsc(new Date(entry.recordedAt).toLocaleDateString())}</span>`).join("")}</div>` : ""}</section>`;
 }
 
 function updateFeeEstimator() {
@@ -371,42 +461,8 @@ function updateFeeEstimator() {
 
 function renderWorkspace() {
   renderSourcingLists();
-  renderListingDrafts();
   renderBusinessTools();
-  if ($("#draftCategory")) $("#draftCategory").innerHTML = Object.entries(CATEGORY_NAMES).map(([id, name]) => `<option value="${featureEsc(id)}">${featureEsc(name)}</option>`).join("");
 }
-
-$("#dealSearchForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const values = featureFormData(event.currentTarget);
-  const search = { id: featureId(), query: String(values.query).trim(), condition: values.condition || "any", maxCost: Math.max(0, featureNum(values.maxCost)), minProfit: Math.max(0, featureNum(values.minProfit)), minRoi: Math.max(0, featureNum(values.minRoi)), minimumComps: Math.max(1, featureNum(values.minimumComps)), maxShipping: Math.max(0, featureNum(values.maxShipping)), feePercent: Math.max(0, Math.min(100, featureNum(values.feePercent))), marketplace: "EBAY_US", active: true, alertsEnabled: false, alertedListingIds: [], createdAt: new Date().toISOString() };
-  data.dealSearches.unshift(search);
-  featurePersist();
-  event.currentTarget.reset();
-  event.currentTarget.elements.maxCost.value = "25";
-  event.currentTarget.elements.minProfit.value = "10";
-  event.currentTarget.elements.minRoi.value = "30";
-  event.currentTarget.elements.minimumComps.value = "3";
-  event.currentTarget.elements.maxShipping.value = "8";
-  event.currentTarget.elements.feePercent.value = data.settings.defaultFeePercent;
-});
-
-$("#scanDealsButton").addEventListener("click", () => {
-  const search = data.dealSearches.find((entry) => entry.active !== false);
-  if (search) runDealSearch(search.id);
-  else renderDealResults([], null, "Save at least one deal search first.");
-});
-
-$("#dealNotificationsButton").addEventListener("click", async () => {
-  if (!("Notification" in window)) return featureToast("This browser does not support notifications. Your deal results still appear in CACHE.");
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return featureToast("Browser notifications were not enabled.");
-  const search = data.dealSearches.find((entry) => entry.active !== false);
-  if (!search) return featureToast("Save a deal search first.");
-  search.alertsEnabled = true;
-  featurePersist();
-  featureToast("Deal alerts enabled while CACHE is open in this browser.");
-});
 
 $("#priceCompForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -438,79 +494,52 @@ $("#buyPlanForm").addEventListener("submit", (event) => {
   featurePersist();
 });
 
-$("#manualDraftForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const values = featureFormData(event.currentTarget);
-  data.listingDrafts.unshift({ id: featureId(), title: String(values.title).trim(), category: values.category || "other", condition: String(values.condition || "Not specified").trim(), description: String(values.description || "").trim(), listedPrice: values.price === "" ? null : Math.max(0, featureNum(values.price)), photos: [], purchaseCost: null, purchaseDate: "", status: "draft", createdAt: new Date().toISOString() });
-  event.currentTarget.reset();
-  featurePersist();
-});
-
-function featureFileToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not prepare this photo."));
-    reader.readAsDataURL(blob);
-  });
+let dealSearchMode = "easy";
+function setDealSearchMode(mode) {
+  dealSearchMode = mode === "advanced" ? "advanced" : "easy";
+  const advanced = dealSearchMode === "advanced";
+  $("#dealAdvancedOptions").hidden = !advanced;
+  $("#dealAdvancedOptions").style.display = advanced ? "grid" : "none";
+  $("#easyDealMode").classList.toggle("primary-button", !advanced);
+  $("#easyDealMode").classList.toggle("secondary-button", advanced);
+  $("#easyDealMode").setAttribute("aria-pressed", String(!advanced));
+  $("#advancedDealMode").classList.toggle("primary-button", advanced);
+  $("#advancedDealMode").classList.toggle("secondary-button", !advanced);
+  $("#advancedDealMode").setAttribute("aria-pressed", String(advanced));
+  $("#saveDealSearchButton").hidden = !advanced;
 }
 
-$("#aiDraftForm").addEventListener("submit", async (event) => {
+function dealSearchFromForm() {
+  const values = featureFormData($("#dealSearchForm"));
+  const advanced = dealSearchMode === "advanced";
+  const maxCost = Math.max(0, featureNum(values.maxCost));
+  return {
+    id: featureId(), query: String(values.query || "").trim(), condition: values.condition || "any",
+    maxCost, minProfit: advanced ? Math.max(0, featureNum(values.minProfit)) : 0,
+    minRoi: advanced ? Math.max(0, featureNum(values.minRoi)) : 0,
+    minimumComps: advanced ? Math.max(1, featureNum(values.minimumComps) || 3) : 3,
+    maxShipping: advanced ? Math.max(0, featureNum(values.maxShipping)) : maxCost,
+    feePercent: advanced ? Math.max(0, Math.min(100, featureNum(values.feePercent))) : featureNum(data.settings.defaultFeePercent),
+    marketplace: "EBAY_US", active: true, createdAt: new Date().toISOString()
+  };
+}
+
+$("#easyDealMode").addEventListener("click", () => setDealSearchMode("easy"));
+$("#advancedDealMode").addEventListener("click", () => setDealSearchMode("advanced"));
+$("#dealSearchForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  const form = event.currentTarget;
-  const files = [...$("#draftPhotoFiles").files];
-  const status = $("#draftStatus");
-  if (!files.length) return;
-  if (files.length > 8) {
-    status.textContent = "Choose up to 8 product photos per batch.";
-    status.classList.add("error");
-    return;
-  }
-  if (files.some((file) => !file.type.startsWith("image/") || file.size > 12 * 1024 * 1024)) {
-    status.textContent = "Each file must be an image smaller than 12 MB.";
-    status.classList.add("error");
-    return;
-  }
-  const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
-  status.classList.remove("error");
-  status.textContent = "Preparing photos and asking AI for listing suggestions…";
-  try {
-    const prepared = await Promise.all(files.map(async (file) => {
-      const blob = await readPhoto(file);
-      return { dataUrl: await featureFileToDataUrl(blob), blob };
-    }));
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    const response = await fetch(cacheApiUrl("/api/ai-draft"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
-      body: JSON.stringify({ products: prepared.map((photo) => ({ imageData: photo.dataUrl })), context: String(new FormData(form).get("context") || ""), categories: Object.entries(CATEGORY_NAMES).map(([id, name]) => ({ id, name })) })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "AI draft service is not configured yet.");
-    const generated = Array.isArray(payload.items) ? payload.items : [];
-    if (generated.length !== files.length) throw new Error("The AI returned an incomplete batch. Nothing was added; try again with fewer photos.");
-    const drafts = [];
-    for (let index = 0; index < generated.length; index += 1) {
-      const suggestion = generated[index];
-      const id = featureId();
-      let photoPath = "";
-      try { photoPath = await uploadPhotoBlob(prepared[index].blob, id); }
-      catch (uploadError) { console.warn("Draft photo upload failed:", uploadError); }
-      drafts.push({ id, title: String(suggestion.title || "Review product title").slice(0, 140), category: Object.hasOwn(CATEGORY_NAMES, suggestion.category) ? suggestion.category : "other", condition: String(suggestion.condition || "Not specified").slice(0, 60), description: String(suggestion.description || "").slice(0, 4000), listedPrice: suggestion.suggestedPrice == null ? null : Math.max(0, featureNum(suggestion.suggestedPrice)), photos: photoPath ? [photoPath] : [], purchaseCost: null, purchaseDate: "", status: "draft", createdAt: new Date().toISOString(), aiGenerated: true });
-    }
-    data.listingDrafts.unshift(...drafts);
-    featurePersist();
-    status.textContent = `${drafts.length} draft(s) ready for your review. No purchase cost or date was generated.`;
-    form.reset();
-  } catch (error) {
-    console.error("AI listing draft generation failed:", error);
-    status.textContent = error.message || "Could not generate listing drafts. Your drafts were not changed.";
-    status.classList.add("error");
-  } finally {
-    button.disabled = false;
-  }
+  const search = dealSearchFromForm();
+  if (search.query.length < 2) return featureToast("Enter at least two characters to search eBay.");
+  runDealSearch(search);
 });
+$("#saveDealSearchButton").addEventListener("click", () => {
+  const search = dealSearchFromForm();
+  if (search.query.length < 2) return featureToast("Enter a product name before saving the search.");
+  data.dealSearches.unshift(search);
+  featurePersist();
+  featureToast("Advanced eBay search saved to your account.");
+});
+setDealSearchMode("easy");
 
 $("#feeEstimatorForm").addEventListener("input", updateFeeEstimator);
 $("#goalForm").addEventListener("submit", (event) => {
@@ -747,45 +776,19 @@ $("#documentForm").elements.itemId.addEventListener("focus", () => {
 document.addEventListener("click", async (event) => {
   const target = event.target;
   const runDeal = target.closest("[data-run-deal]");
-  if (runDeal) return runDealSearch(runDeal.dataset.runDeal);
+  if (runDeal) {
+    const search = data.dealSearches.find((entry) => entry.id === runDeal.dataset.runDeal);
+    if (search) runDealSearch(search);
+    return;
+  }
   const deleteDeal = target.closest("[data-delete-deal]");
   if (deleteDeal) { data.dealSearches = data.dealSearches.filter((entry) => entry.id !== deleteDeal.dataset.deleteDeal); return featurePersist(); }
-  const pauseDeal = target.closest("[data-pause-deal]");
-  if (pauseDeal) { const search = data.dealSearches.find((entry) => entry.id === pauseDeal.dataset.pauseDeal); if (search) search.active = search.active === false; return featurePersist(); }
   const deleteComp = target.closest("[data-delete-comp]");
   if (deleteComp) { data.priceComps = data.priceComps.filter((entry) => entry.id !== deleteComp.dataset.deleteComp); return featurePersist(); }
   const deleteSource = target.closest("[data-delete-source]");
   if (deleteSource) { data.sourcingLog = data.sourcingLog.filter((entry) => entry.id !== deleteSource.dataset.deleteSource); return featurePersist(); }
   const deletePlan = target.closest("[data-delete-plan]");
   if (deletePlan) { data.buyPlans = data.buyPlans.filter((entry) => entry.id !== deletePlan.dataset.deletePlan); return featurePersist(); }
-  const createInventory = target.closest("[data-draft-inventory]");
-  if (createInventory) {
-    const draft = data.listingDrafts.find((entry) => entry.id === createInventory.dataset.draftInventory);
-    const card = createInventory.closest("[data-draft-card]");
-    const costInput = card.querySelector("[data-draft-purchase-cost]");
-    const dateInput = card.querySelector("[data-draft-purchase-date]");
-    const cost = Number(costInput.value);
-    if (!dateInput.value || !Number.isFinite(cost) || cost < 0) { return featureToast("Enter the actual purchase cost and date before adding this draft to inventory."); }
-    const itemId = featureId();
-    const photo = (draft.photos || []).find((entry) => typeof entry === "string") || "";
-    data.items.unshift({ id: itemId, name: draft.title || "Untitled item", sku: "", productCategory: draft.category || "other", cardGame: draft.category === "pokemon" ? "pokemon" : "other", cardSet: "", cardNumber: "", cardPrinting: "", cardLanguage: "", listedPrice: featureNum(draft.listedPrice), purchaseCost: featureRound(cost), purchaseCostUnknown: false, purchaseCostEstimated: false, purchaseDate: dateInput.value, itemCondition: draft.condition || "Not specified", photo, photos: (draft.photos || []).filter((path) => !String(path).startsWith("data:")), notes: draft.description || "", createdAt: new Date().toISOString(), listedAt: new Date().toISOString(), priceHistory: [] });
-    draft.inventoryItemId = itemId;
-    draft.status = "inventory-created";
-    featurePersist();
-    featureToast("Inventory item created. The draft remains saved; publishing still requires the eBay connection.");
-    return;
-  }
-  const deleteDraft = target.closest("[data-delete-draft]");
-  if (deleteDraft) { data.listingDrafts = data.listingDrafts.filter((entry) => entry.id !== deleteDraft.dataset.deleteDraft); return featurePersist(); }
-  const splitDraft = target.closest("[data-split-draft]");
-  if (splitDraft) {
-    const draft = data.listingDrafts.find((entry) => entry.id === splitDraft.dataset.splitDraft);
-    if (!draft || draft.photos.length < 2) return;
-    const children = draft.photos.map((photo, index) => ({ ...draft, id: featureId(), title: `${draft.title} · ${index + 1}`, photos: [photo], purchaseDate: "", purchaseCost: null, inventoryItemId: null, status: "draft", parentDraftId: draft.id }));
-    data.listingDrafts = data.listingDrafts.filter((entry) => entry.id !== draft.id);
-    data.listingDrafts.unshift(...children);
-    return featurePersist();
-  }
   const deleteGoal = target.closest("[data-delete-goal]");
   if (deleteGoal) { data.goals = data.goals.filter((entry) => entry.id !== deleteGoal.dataset.deleteGoal); return featurePersist(); }
   const deleteGrading = target.closest("[data-delete-grading]");
@@ -822,16 +825,6 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
-  const draftId = target.dataset.draftId;
-  if (draftId && target.dataset.draftField) {
-    const draft = data.listingDrafts.find((entry) => entry.id === draftId);
-    if (draft) {
-      const field = target.dataset.draftField;
-      draft[field] = field === "listedPrice" ? (target.value === "" ? null : Math.max(0, featureNum(target.value))) : target.value;
-      saveData();
-      renderListingDrafts();
-    }
-  }
   if (target.matches("[data-grading-status]")) {
     const item = data.gradingSubmissions.find((entry) => entry.id === target.dataset.gradingStatus);
     if (item) { item.status = target.value; saveData(); renderGrading(); }
@@ -842,71 +835,8 @@ document.addEventListener("change", (event) => {
   }
 });
 
-$("#listingDraftList").addEventListener("click", (event) => {
-  const combine = event.target.closest("[data-combine-drafts]");
-  if (!combine) return;
-  const ids = [...$("#listingDraftList").querySelectorAll("[data-select-draft]:checked")].map((checkbox) => checkbox.dataset.selectDraft);
-  const selected = data.listingDrafts.filter((draft) => ids.includes(draft.id) && !draft.inventoryItemId);
-  if (selected.length < 2) return featureToast("Select at least two drafts to combine.");
-  const main = selected[0];
-  main.photos = selected.flatMap((draft) => draft.photos || []);
-  main.title = selected.map((draft) => draft.title).filter(Boolean).join(" + ").slice(0, 140);
-  main.description = selected.map((draft) => draft.description).filter(Boolean).join("\n\n");
-  const removed = new Set(selected.slice(1).map((draft) => draft.id));
-  data.listingDrafts = data.listingDrafts.filter((draft) => !removed.has(draft.id));
-  featurePersist();
-});
-
-$("#listingDraftList").insertAdjacentHTML("beforebegin", '<div class="detail-actions draft-batch-actions"><button class="secondary-button" type="button" data-combine-drafts>Combine selected drafts</button></div>');
-
 document.addEventListener("input", (event) => {
   if (event.target.closest("#feeEstimatorForm")) updateFeeEstimator();
-});
-
-document.addEventListener("click", (event) => {
-  const search = event.target.closest("[data-market-search]");
-  if (search) return searchMarketValue(search.dataset.marketSearch, search.dataset.marketRefresh || "");
-
-  const select = event.target.closest("[data-market-select]");
-  if (select) {
-    const match = marketLookupCandidates.get(select.dataset.marketSelect);
-    const item = match && data.items.find((entry) => entry.id === match.itemId);
-    if (!match || !item || !Number.isFinite(match.variant.price) || match.variant.price < 0 || match.variant.priceStatus !== "current") return;
-    const now = new Date().toISOString();
-    const priorHistory = Array.isArray(item.marketPriceHistory) ? item.marketPriceHistory : [];
-    if (item.marketValue !== undefined && Number(item.marketValue) !== match.variant.price) {
-      priorHistory.push({ value: Number(item.marketValue), source: item.marketValueSource || "Manual", recordedAt: item.marketValueFetchedAt || item.marketValueUpdatedAt || now });
-    }
-    item.marketValue = featureRound(match.variant.price);
-    item.marketValueCurrency = match.variant.currency || "USD";
-    item.marketValueSource = "JustTCG";
-    item.marketValueUpdatedAt = match.variant.updatedAt ? new Date(match.variant.updatedAt * 1000).toISOString() : now;
-    item.marketValueFetchedAt = now;
-    item.marketValueCondition = match.variant.type === "graded" ? match.variant.grade : match.variant.condition;
-    item.marketValuePrinting = match.variant.printing || "";
-    item.marketValueLanguage = match.variant.language || "";
-    item.marketProviderCardId = match.card.id;
-    item.marketProviderCardName = [match.card.name, match.card.set, match.card.number && `#${match.card.number}`].filter(Boolean).join(" · ");
-    item.marketProviderVariantId = match.variant.id;
-    item.marketPriceStatus = match.variant.priceStatus;
-    item.marketSales90d = match.variant.sales90d;
-    item.marketConfidence = marketConfidence(match.variant.sales90d);
-    item.marketPriceHistory = priorHistory.slice(-19).concat([{ value: item.marketValue, source: "JustTCG", recordedAt: now, priceUpdatedAt: item.marketValueUpdatedAt }]);
-    marketLookupCandidates.clear();
-    featurePersist();
-    openItemDetails(item.id);
-    return;
-  }
-
-  const clear = event.target.closest("[data-market-clear]");
-  if (clear) {
-    const item = data.items.find((entry) => entry.id === clear.dataset.marketClear);
-    if (!item) return;
-    ["marketValue", "marketValueCurrency", "marketValueSource", "marketValueUpdatedAt", "marketValueFetchedAt", "marketValueCondition", "marketValuePrinting", "marketValueLanguage", "marketProviderCardId", "marketProviderCardName", "marketProviderVariantId", "marketPriceStatus", "marketSales90d", "marketConfidence", "marketPriceHistory"]
-      .forEach((key) => { delete item[key]; });
-    featurePersist();
-    openItemDetails(item.id);
-  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -915,7 +845,7 @@ document.addEventListener("submit", (event) => {
   event.preventDefault();
   const item = data.items.find((entry) => entry.id === form.dataset.marketManual);
   const value = Number(new FormData(form).get("value"));
-  if (!item || !Number.isFinite(value) || value < 0) return featureToast("Enter a valid market value.");
+  if (!item || !Number.isFinite(value) || value < 0) return featureToast("Enter a valid value estimate.");
   const now = new Date().toISOString();
   const history = Array.isArray(item.marketPriceHistory) ? item.marketPriceHistory : [];
   if (item.marketValue !== undefined && Number(item.marketValue) !== value) history.push({ value: Number(item.marketValue), source: item.marketValueSource || "Manual", recordedAt: item.marketValueFetchedAt || item.marketValueUpdatedAt || now });

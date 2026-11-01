@@ -7,7 +7,7 @@ async function getEbayToken(env) {
     headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope"
   });
-  const result = await response.json();
+  const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.access_token) throw new Error("eBay token unavailable");
   return result.access_token;
 }
@@ -27,12 +27,26 @@ export async function onRequestPost({ request, env }) {
     const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(limit));
+    url.searchParams.set("sort", "price");
     const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": marketplace } });
-    const result = await response.json();
-    if (!response.ok) return jsonResponse({ error: "eBay could not complete the listing search. Check API access and search settings." }, 502);
-    const items = (result.itemSummaries || []).map((item) => ({ id: item.itemId, title: item.title || "Untitled listing", price: Number(item.price?.value) || 0, shipping: Number(item.shippingOptions?.[0]?.shippingCost?.value) || 0, condition: item.condition || "", url: item.itemWebUrl || "", imageUrl: item.image?.imageUrl || "" })).filter((item) => item.url && item.price >= 0);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return jsonResponse({ error: "eBay could not complete the listing search. Check Buy API production access, credentials, and marketplace settings." }, 502);
+    const items = (result.itemSummaries || []).map((item) => {
+      const shippingText = item.shippingOptions?.[0]?.shippingCost?.value;
+      const shipping = shippingText == null ? null : Number(shippingText);
+      return {
+        id: item.itemId,
+        title: item.title || "Untitled listing",
+        price: Number(item.price?.value),
+        currency: item.price?.currency || "USD",
+        shipping: Number.isFinite(shipping) ? shipping : null,
+        condition: item.condition || "",
+        url: item.itemWebUrl || "",
+        imageUrl: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl || ""
+      };
+    }).filter((item) => item.url && Number.isFinite(item.price) && item.price >= 0);
     return jsonResponse({ items, source: "eBay Browse active listings" });
   } catch {
-    return jsonResponse({ error: "Could not connect to eBay Browse API. Check eBay credentials and access." }, 502);
+    return jsonResponse({ error: "Could not connect to eBay Browse API. Check eBay credentials and Buy API access." }, 502);
   }
 }

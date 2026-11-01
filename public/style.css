@@ -1868,10 +1868,12 @@ textarea::placeholder {
 }
 
 .mobile-account-link { display: none; }
-.account-panel, .ebay-import-panel { margin-bottom: 18px; }
+.account-panel, .ebay-import-panel, .ebay-active-import-panel { margin-bottom: 18px; }
 .account-reset-panel { margin-bottom: 18px; }
 .account-panel .page-description { margin-bottom: 0; }
 .ebay-preview-table { min-width: 1240px; }
+.ebay-active-preview-table { min-width: 920px; }
+.ebay-active-percent input[type="range"] { display: block; width: min(100%, 320px); margin-top: 9px; accent-color: #efff00; }
 .ebay-preview-table td:first-child, .ebay-preview-table th:first-child { text-align: center; }
 .ebay-preview-table input[type="checkbox"] { accent-color: #efff00; width: 18px; height: 18px; }
 .ebay-cost-input { width: 100px; min-width: 90px; }
@@ -1887,23 +1889,12 @@ textarea::placeholder {
 .feature-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .feature-form .primary-button { justify-self: start; }
 .feature-form .full-width { grid-column: 1 / -1; }
-.feature-list, .deal-results { display: grid; gap: 10px; margin-top: 16px; }
+.feature-list { display: grid; gap: 10px; margin-top: 16px; }
 .feature-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 13px; border: 1px solid rgba(255,255,255,.09); border-radius: 12px; background: rgba(255,255,255,.02); }
 .feature-row p { margin: 5px 0 0; color: #a5a8ad; font-size: 13px; }
 .feature-row small { display: block; margin-top: 5px; color: #92969b; }
 .feature-row-actions { display: flex; flex-wrap: wrap; gap: 7px; }
-.deal-card { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
-.deal-card-match { border-color: rgba(239,255,0,.65); }
-.deal-card > img, .draft-card > img { width: 100%; max-height: 130px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.04); }
-.deal-card-main { display: grid; gap: 6px; }
-.deal-card-main span, .deal-card-main small { color: #a5a8ad; font-size: 13px; }
-.draft-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
-.draft-card { display: grid; align-content: start; gap: 11px; padding: 15px; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; }
-.draft-card > img { max-height: 200px; }
-.draft-select { color: #a5a8ad; font-size: 12px; }
-.draft-missing-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; padding: 12px; border-radius: 10px; background: rgba(239,255,0,.04); }
-.draft-missing-fields > strong, .draft-missing-fields > small { grid-column: 1 / -1; }
-.draft-missing-fields small { color: #a5a8ad; }
+.draft-card > img { width: 100%; max-height: 130px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.04); }
 .lot-item-choices { display: grid; gap: 7px; max-height: 260px; overflow: auto; }
 .lot-item-choice { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 9px; border-radius: 9px; background: rgba(255,255,255,.035); }
 .lot-item-choice small { color: #92969b; }
@@ -1920,16 +1911,14 @@ textarea::placeholder {
 .market-source-pill { padding: 5px 9px; border: 1px solid rgba(255,255,255,.13); border-radius: 99px; color: #c2c6c9; font-size: 11px; }
 .market-manual-form { display: flex; flex-wrap: wrap; align-items: end; gap: 9px; }
 .market-manual-form .field { width: min(100%,240px); }
-.market-search-results { display: grid; gap: 9px; }
-.market-card-result { display: grid; gap: 8px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 11px; }
-.market-card-result > p, .market-variant-row p { margin: 4px 0; color: #a5a8ad; font-size: 12px; }
-.market-variant-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 9px; border-radius: 8px; background: rgba(255,255,255,.035); }
-.market-variant-row small { color: #92969b; font-size: 11px; }
 .market-value-chip { color: #eaff7d !important; }
-.market-clear-button { justify-self: start; }
-.draft-readiness { margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
-.draft-readiness.needs-review { color: #ffcf79; background: rgba(255,183,77,.08); }
-.draft-readiness.ready { color: #8de2a4; background: rgba(57,217,138,.08); }
+.deal-mode-switch { margin-bottom: 14px; }
+.deal-card { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 14px; padding: 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+.deal-card-match { border-color: rgba(239,255,0,.65); }
+.deal-card > img { width: 100%; max-height: 130px; object-fit: contain; border-radius: 8px; background: rgba(255,255,255,.04); }
+.deal-card-main { display: grid; gap: 6px; }
+.deal-card-main span, .deal-card-main small { color: #a5a8ad; font-size: 13px; }
+.deal-results { display: grid; gap: 10px; margin-top: 16px; }
 
 @media (max-width: 700px) {
   .mobile-account-link { display: inline-flex; padding: 7px 9px; font-size: 11px; }
@@ -1939,8 +1928,8 @@ textarea::placeholder {
   .report-filters label { min-width: 0; }
   .report-filters input, .report-filters select { width: 100%; }
   .photo-preview-wrap { align-items: flex-start; flex-direction: column; }
-  .feature-form, .draft-grid { grid-template-columns: 1fr; }
-  .feature-form .full-width, .draft-missing-fields > strong, .draft-missing-fields > small { grid-column: auto; }
+  .feature-form { grid-template-columns: 1fr; }
+  .feature-form .full-width { grid-column: auto; }
   .feature-row { align-items: flex-start; }
   .feature-row-actions { width: 100%; }
   .feature-row-actions button { flex: 1 1 auto; }
@@ -1949,5 +1938,4 @@ textarea::placeholder {
   .lot-item-choice small { grid-column: 2; }
   .market-manual-form { align-items: stretch; flex-direction: column; }
   .market-manual-form .field { width: 100%; }
-  .market-variant-row { align-items: flex-start; }
 }
